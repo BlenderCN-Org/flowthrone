@@ -1,0 +1,7 @@
+build
+build/*
+*.jpg
+*.png
+*.sh
+*.pyc
+*.swp
