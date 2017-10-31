@@ -19,13 +19,13 @@ cv::Mat ReadFLO(const std::string &filename) {
   for (int r = 0; r < height; ++r) {
     float *ptr = image.ptr<float>(r);
     CHECK_EQ(2 * width, fread(ptr, sizeof(float), 2 * width, fid));
-    for (int c = 0; c < 2 * width; c+=2) {
+    for (int c = 0; c < 2 * width; c += 2) {
       // Values greater than 1e9 (either |u| or |v|) is considered to be
       // unknown and set to 'nan'.
       // Typically, these values are occluded pixels in groundtruth datasets.
-      if (std::abs(ptr[c]) > 1e9 or std::abs(ptr[c+1]) > 1e9) {
+      if (std::abs(ptr[c]) > 1e9 or std::abs(ptr[c + 1]) > 1e9) {
         ptr[c] = nanf("");
-        ptr[c+1] = nanf("");
+        ptr[c + 1] = nanf("");
       }
     }
   }

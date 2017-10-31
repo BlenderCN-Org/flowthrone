@@ -1,7 +1,7 @@
-#include "io.h"
-#include "utils.h"
 #include <gtest/gtest.h>
 #include <glog/logging.h>
+#include "io.h"
+#include "test_utils.h"
 
 namespace flowthrone {
 
