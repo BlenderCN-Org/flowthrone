@@ -5,7 +5,7 @@ namespace flowthrone {
 
 namespace {
 
-void CheckForSanityErrors(const cv::Mat &flow, const cv::Mat &flow_gt) {
+void CheckForSanityErrors(const cv::Mat& flow, const cv::Mat& flow_gt) {
   CHECK_EQ(CV_32FC2, flow.type()) << "Must be CV_32FC2";
   CHECK_EQ(CV_32FC2, flow_gt.type()) << "Must be CV_32FC2";
   CHECK_EQ(flow.rows, flow_gt.rows);
@@ -13,21 +13,21 @@ void CheckForSanityErrors(const cv::Mat &flow, const cv::Mat &flow_gt) {
 }
 
 // NaN's are 'sentinel' values in groundtruth where flow is unavailable.
-bool IsInvalidWarp(const cv::Vec2f &uv) {
+bool IsInvalidWarp(const cv::Vec2f& uv) {
   return std::isnan(uv[0]) || std::isnan(uv[1]);
 }
 }
 
-float FlowEndpointError(const cv::Mat &flow, const cv::Mat &flow_gt,
-                        cv::Mat *flow_error) {
+float FlowEndpointError(const cv::Mat& flow, const cv::Mat& flow_gt,
+                        cv::Mat* flow_error) {
   CheckForSanityErrors(flow, flow_gt);
 
   cv::Mat error(flow.rows, flow.cols, CV_32FC1, cv::Scalar(0.0f));
   float sum_of_errors = 0.0f;
   for (int r = 0; r < flow.rows; ++r) {
     for (int c = 0; c < flow.cols; ++c) {
-      const cv::Vec2f &uv_gt = flow_gt.at<cv::Vec2f>(r, c);
-      const cv::Vec2f &uv = flow.at<cv::Vec2f>(r, c);
+      const cv::Vec2f& uv_gt = flow_gt.at<cv::Vec2f>(r, c);
+      const cv::Vec2f& uv = flow.at<cv::Vec2f>(r, c);
       if (IsInvalidWarp(uv_gt)) {
         continue;
       }
@@ -43,16 +43,16 @@ float FlowEndpointError(const cv::Mat &flow, const cv::Mat &flow_gt,
   return sum_of_errors / (flow.rows * flow.cols);
 }
 
-float FlowAngularError(const cv::Mat &flow, const cv::Mat &flow_gt,
-                       cv::Mat *flow_error) {
+float FlowAngularError(const cv::Mat& flow, const cv::Mat& flow_gt,
+                       cv::Mat* flow_error) {
   CheckForSanityErrors(flow, flow_gt);
 
   cv::Mat error(flow.rows, flow.cols, CV_32FC1, cv::Scalar(0.0f));
   float sum_of_errors = 0.0f;
   for (int r = 0; r < flow.rows; ++r) {
     for (int c = 0; c < flow.cols; ++c) {
-      const cv::Vec2f &uv_gt = flow_gt.at<cv::Vec2f>(r, c);
-      const cv::Vec2f &uv = flow.at<cv::Vec2f>(r, c);
+      const cv::Vec2f& uv_gt = flow_gt.at<cv::Vec2f>(r, c);
+      const cv::Vec2f& uv = flow.at<cv::Vec2f>(r, c);
       if (IsInvalidWarp(uv_gt)) {
         continue;
       }

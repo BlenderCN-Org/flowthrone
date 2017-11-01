@@ -6,7 +6,7 @@ namespace flowthrone {
 
 cv::Mat GetRandomFlow(int rows, int cols) {
   cv::Mat uv(rows, cols, CV_32FC2);
-  float *data = reinterpret_cast<float *>(uv.data);
+  float* data = reinterpret_cast<float*>(uv.data);
   for (int i = 0; i < rows * cols * 2; ++i) {
     data[i] = drand48();
   }

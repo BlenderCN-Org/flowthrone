@@ -37,14 +37,14 @@ std::vector<cv::Vec3b> MakeColorWheel() {
 
 }  // namespace internal
 
-cv::Mat ComputeFlowColor(const cv::Mat &flow) {
+cv::Mat ComputeFlowColor(const cv::Mat& flow) {
   CHECK_EQ(CV_32FC2, flow.type()) << "Input should be CV_32FC2.";
   std::vector<cv::Vec3b> colorwheel = internal::MakeColorWheel();
   int num_colors = colorwheel.size();
   cv::Mat image(flow.rows, flow.cols, CV_8UC3);
 
   // Find largest flow magnitude.
-  float *flow_data = reinterpret_cast<float *>(flow.data);
+  float* flow_data = reinterpret_cast<float*>(flow.data);
   float uv_max_mag = std::numeric_limits<float>::lowest();
   for (size_t i = 0; i < flow.total(); ++i) {
     float uv = sqrt(flow_data[2 * i] * flow_data[2 * i] +
@@ -69,8 +69,8 @@ cv::Mat ComputeFlowColor(const cv::Mat &flow) {
       int k0 = static_cast<int>(fk) % num_colors;
       int k1 = (k0 + 1) % num_colors;
       float f = fk - k0;
-      const cv::Vec3b &color0 = colorwheel[k0];
-      const cv::Vec3b &color1 = colorwheel[k1];
+      const cv::Vec3b& color0 = colorwheel[k0];
+      const cv::Vec3b& color1 = colorwheel[k1];
       cv::Vec3f color;
       for (int q = 0; q < 3; ++q) {
         color[q] =
@@ -85,7 +85,7 @@ cv::Mat ComputeFlowColor(const cv::Mat &flow) {
   return image;
 }
 
-cv::Mat HorizontalConcat(const cv::Mat &x, const cv::Mat &y) {
+cv::Mat HorizontalConcat(const cv::Mat& x, const cv::Mat& y) {
   CHECK_EQ(x.rows, y.rows);
   CHECK_EQ(x.type(), y.type());
   cv::Mat out;
@@ -93,7 +93,7 @@ cv::Mat HorizontalConcat(const cv::Mat &x, const cv::Mat &y) {
   return out;
 }
 
-cv::Mat VerticalConcat(const cv::Mat &x, const cv::Mat &y) {
+cv::Mat VerticalConcat(const cv::Mat& x, const cv::Mat& y) {
   CHECK_EQ(x.cols, y.cols);
   CHECK_EQ(x.type(), y.type());
   cv::Mat out;
