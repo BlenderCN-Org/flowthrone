@@ -38,6 +38,8 @@ include_directories(
 add_library(flowthrone STATIC
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
+  flowthrone/cpp/visualization.cpp
+  flowthrone/cpp/visualization.h
 )
 target_link_libraries(flowthrone
   ${GLOG_LIBRARIES}
@@ -63,6 +65,15 @@ target_link_libraries(io_test
   ${OpenCV_LIBS}
 )
 
+add_executable(visualization_test flowthrone/cpp/visualization_test.cpp)
+target_link_libraries(visualization_test
+  flowthrone
+  ${GTEST_BOTH_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
 # List of tests.
 enable_testing()
 add_test(io_test io_test)
+add_test(visualization_test visualization_test)
