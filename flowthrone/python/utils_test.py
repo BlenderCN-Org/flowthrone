@@ -46,10 +46,35 @@ class TestColorMap(unittest.TestCase):
     flow[:,:,0] = xx - 50
     flow[:,:,1] = yy - 50
     
-    image = utils.compute_flow_color(flow[:,:,0], flow[:,:,1])/255.
+    image = utils.compute_flow_color(u=flow[:,:,0], v=flow[:,:,1])/255.
 
     # Make sure that error between the correct colormap and ours is small.
     err = np.sum(abs(image - self.gtimage))/np.prod(image.shape)
+    self.assertLessEqual(err, self.tolerance)
+
+class TestWarpWithFlow(unittest.TestCase):
+  image = None
+  tolerance = 1e-3
+  def setUp(self):
+    self.image = np.random.uniform(0.0, 1.0, [50, 100])
+
+  def test_identity(self):
+    """ Verify that uv=0 does not change the image. """
+    uv = np.zeros(list(self.image.shape) + [2])
+    image_warped = utils.warp_with_flow(self.image, uv)
+    err = np.linalg.norm(image_warped - self.image)
+    self.assertLessEqual(err, self.tolerance)
+
+  def test_simple_shift(self):
+    """ Verify that a simple shift works correctly. """
+    uv = np.zeros(list(self.image.shape) + [2])
+    uv[:,:,0] = 1
+    image_warped_gt = np.zeros(self.image.shape)
+    image_warped_gt[:,0:-1] = np.copy(self.image[:,1:])
+    image_warped_gt[:,-1] = 0
+
+    image_warped = utils.warp_with_flow(self.image, uv)
+    err = np.linalg.norm(image_warped - image_warped_gt)
     self.assertLessEqual(err, self.tolerance)
 
 if __name__ == '__main__':

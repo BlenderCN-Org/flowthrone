@@ -56,8 +56,16 @@ def make_colorwheel():
   colors = [np.asarray(c) for c in colors]
   return np.asarray(colors)
 
-def compute_flow_color(u, v):
-  """ Returns a BGR image colored according to optical flow """
+def compute_flow_color(uv=None, u=None, v=None):
+  """ Returns a BGR image colored according to optical flow. You can either
+      pass two components (horizontal and vertical displacements) separately,
+      or pack them into one argument. """
+  # TODO(vasiliy): should force named arguments.
+  assert uv is not None or (u is not None and v is not None)
+  if uv is not None:
+    u = uv[:,:,0]
+    v = uv[:,:,1]
+
   colorwheel = make_colorwheel()/255.
   num_colors = len(colorwheel)
 
@@ -83,3 +91,10 @@ def compute_flow_color(u, v):
     image[:,:,i] = 1.0 - mag_normalized * (1-color)
   image = np.asarray(np.minimum(255, np.floor(255*image)), dtype='uint8')
   return image
+
+
+def warp_with_flow(image, uv):
+  X, Y = np.meshgrid(range(image.shape[1]), range(image.shape[0]))
+  x_warp = np.asarray(uv[:,:,0] + X, dtype='float32')
+  y_warp = np.asarray(uv[:,:,1] + Y, dtype='float32')
+  return cv2.remap(image, x_warp, y_warp, cv2.INTER_LINEAR)
