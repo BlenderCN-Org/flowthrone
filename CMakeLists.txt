@@ -40,7 +40,10 @@ add_library(flowthrone STATIC
   flowthrone/cpp/io.h
   flowthrone/cpp/visualization.cpp
   flowthrone/cpp/visualization.h
+  flowthrone/cpp/utils.cpp
+  flowthrone/cpp/utils.h
 )
+
 target_link_libraries(flowthrone
   ${GLOG_LIBRARIES}
   ${OpenCV_LIBS}
@@ -90,9 +93,18 @@ target_link_libraries(evaluation_test
   ${OpenCV_LIBS}
 )
 
+add_executable(utils_test flowthrone/cpp/utils_test.cpp)
+target_link_libraries(utils_test
+  flowthrone
+  ${GTEST_BOTH_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
 
 # List of tests.
 enable_testing()
 add_test(io_test io_test)
 add_test(visualization_test visualization_test)
 add_test(evaluation_test evaluation_test)
+add_test(utils_test utils_test)
