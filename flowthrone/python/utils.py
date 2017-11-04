@@ -98,3 +98,8 @@ def warp_with_flow(image, uv):
   x_warp = np.asarray(uv[:,:,0] + X, dtype='float32')
   y_warp = np.asarray(uv[:,:,1] + Y, dtype='float32')
   return cv2.remap(image, x_warp, y_warp, cv2.INTER_LINEAR)
+
+
+def compute_residual(image0, image1, uv):
+  return image0 - warp_with_flow(image1, uv)
+

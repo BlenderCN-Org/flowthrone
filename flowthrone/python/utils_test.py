@@ -77,6 +77,25 @@ class TestWarpWithFlow(unittest.TestCase):
     err = np.linalg.norm(image_warped - image_warped_gt)
     self.assertLessEqual(err, self.tolerance)
 
+class TestComputeResidual(unittest.TestCase):
+    def test_simple(self):
+      """ Create a simple scenario where a rectangle is moving to the right.
+          Given perfect flow, residual should be nonzero only in the occluded
+          region. """
+      uv_fwd = np.zeros([9, 9, 2])
+      uv_fwd[3:6, 3:6,0] = 1
+      i0 = np.zeros([9, 9])
+      i1 = np.zeros([9, 9])
+      i0[3:6, 3:6] = 255
+      i1[3:6, 4:7] = 255
+      err = utils.compute_residual(i0, i1, uv_fwd)
+      # Verify that in the occluded region residual is large.
+      self.assertGreater(np.linalg.norm(err[3:6,6]), 0.0)
+      # Verify that outside residual is zero.
+      err_fixed_occ = np.copy(err)
+      err_fixed_occ[3:6, 6] = 0
+      self.assertEqual(np.linalg.norm(err_fixed_occ), 0.0)
+
 if __name__ == '__main__':
   unittest.main(verbosity=2)
 
