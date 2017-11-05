@@ -6,32 +6,25 @@ import struct
 def read_flo(filename):
   """
   Reads binary .flo file into a numpy array (cv::Mat) 
-  TODO(vasiliy): this is far slower than it can be.
   """
   fid = open(filename, 'rb')
   tag = fid.read(4)
   width = struct.unpack('i', fid.read(4))[0]
   height = struct.unpack('i', fid.read(4))[0]
-  flow = np.zeros([height, width, 2])
-  for r in range(height):
-    for c in range(width):
-      flow[r,c,0] = struct.unpack('f', fid.read(4))[0]
-      flow[r,c,1] = struct.unpack('f', fid.read(4))[0]
-  return flow
+  n = width * height * 2 
+  data = struct.unpack('f'*n, fid.read(4*n))
+  return np.reshape(data, [height, width, 2])
 
 def write_flo(filename, flow):
   """
   Writes binary .flo file given a numpy array (cv::Mat)
-  TODO(vasiliy): this is far slower than it can be.
   """
   fid = open(filename, 'wb')
   fid.write(struct.pack('f', 202021.25))
   fid.write(struct.pack('i', flow.shape[1]))
   fid.write(struct.pack('i', flow.shape[0]))
-  for r in range(flow.shape[0]):
-    for c in range(flow.shape[1]):
-      fid.write(struct.pack('f', flow[r,c,0]))
-      fid.write(struct.pack('f', flow[r,c,1]))
+  n = np.prod(flow.shape)
+  fid.write(struct.pack('f'*n, *np.reshape(flow, n)))
 
 def make_colorwheel():
   ry = 15
