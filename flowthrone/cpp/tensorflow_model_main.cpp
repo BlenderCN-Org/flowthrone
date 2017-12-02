@@ -11,21 +11,17 @@
 #include "optical_flow_tf_model.h"
 
 std::string gBasePath = "/home/vasiliy/";
-DEFINE_string(export_dir, 
-    "/home/vasiliy/Sandbox/flowthrone/data/",
-    "Path to the directory with SavedModel");
-DEFINE_string(img1, 
-    //"/home/vasiliy/data/middlebury/Hydrangea/frame10.png",
-    "/home/vasiliy/030000_img1.png",
-    "Filename of image1");
-DEFINE_string(img2, 
-    "/home/vasiliy/030000_img2.png",
-    //"/home/vasiliy/data/middlebury/Hydrangea/frame11.png",
-    "Filename of image2");
-DEFINE_string(gt,
-    "/home/vasiliy/030000_flow1.flo",
-    //"/home/vasiliy/data/middlebury/Hydrangea/flow10.flo",
-    "Groundtruth");
+DEFINE_string(export_dir, "/home/vasiliy/Sandbox/flowthrone/data/",
+              "Path to the directory with SavedModel");
+DEFINE_string(img1,
+              //"/home/vasiliy/data/middlebury/Hydrangea/frame10.png",
+              "/home/vasiliy/030000_img1.png", "Filename of image1");
+DEFINE_string(img2, "/home/vasiliy/030000_img2.png",
+              //"/home/vasiliy/data/middlebury/Hydrangea/frame11.png",
+              "Filename of image2");
+DEFINE_string(gt, "/home/vasiliy/030000_flow1.flo",
+              //"/home/vasiliy/data/middlebury/Hydrangea/flow10.flo",
+              "Groundtruth");
 
 namespace tf = tensorflow;
 
@@ -35,11 +31,11 @@ int main(int argc, char** argv) {
   cv::Mat img1 = cv::imread(FLAGS_img1);
   cv::Mat img2 = cv::imread(FLAGS_img2);
   CHECK(img1.total() && img2.total())
-    << "Could not load one or more images. Maybe you did not provide "
-       "filenames, or maybe the provided filenames are incorrect? "
-    << FLAGS_img1 << " " << FLAGS_img2
-    << " " << img1.total() << " " << img2.total();
-  CHECK(!FLAGS_export_dir.empty()) 
+      << "Could not load one or more images. Maybe you did not provide "
+         "filenames, or maybe the provided filenames are incorrect? "
+      << FLAGS_img1 << " " << FLAGS_img2 << " " << img1.total() << " "
+      << img2.total();
+  CHECK(!FLAGS_export_dir.empty())
       << "You must provide a tensorflow graph definition to be able to run "
          "binary. ";
 
@@ -59,7 +55,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-} //namespace flowthrone
+}  // namespace flowthrone
 
 int main(int argc, char** argv) {
   ::gflags::ParseCommandLineFlags(&argc, &argv, true);

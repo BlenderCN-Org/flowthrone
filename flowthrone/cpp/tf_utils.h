@@ -6,7 +6,7 @@ namespace flowthrone {
 
 // TODO(vasiliy): more documentation.
 //
-// Converts a cv::Mat to a tensor. 
+// Converts a cv::Mat to a tensor.
 // cv::Mat must have depth 32F. TODO(vasiliy): fix.
 tensorflow::Tensor AsTensor(const cv::Mat& x);
 // Converts a tensor to a cv::Mat.
@@ -17,4 +17,4 @@ cv::Mat AsMat(const tensorflow::Tensor& x);
 
 void CHECK_STATUS(const tensorflow::Status& s);
 
-} // namespace flowthrone
+}  // namespace flowthrone
