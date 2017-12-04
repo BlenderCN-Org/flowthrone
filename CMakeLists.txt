@@ -20,6 +20,8 @@ set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(cmake/FindGlog.cmake)
 include(cmake/FindGFlags.cmake)
+include(cmake/FindEigen.cmake)
+include(cmake/FindTensorFlow.cmake)
 
 find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(OpenCV REQUIRED COMPONENTS opencv_core opencv_highgui opencv_imgproc opencv_video)
@@ -27,14 +29,19 @@ find_package(GTest REQUIRED)
 find_package(GFlags REQUIRED)
 find_package(Glog REQUIRED)
 find_package(Protobuf REQUIRED)
+find_package(Eigen)
+find_package(TensorFlow)
+
 
 include_directories(
   ${GTEST_INCLUDE_DIRS}
   ${GLOG_INCLUDE_DIRS}
   ${GFLAGS_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIR}
+  ${Eigen_INCLUDE_DIRS}
   ${Protobuf_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
+  ${TensorFlow_INCLUDE_DIRS}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -82,6 +89,26 @@ target_link_libraries(test_utils
   ${OpenCV_LIBS}
 )
 
+add_library(tf_utils STATIC
+  flowthrone/cpp/tf_utils.cpp
+  flowthrone/cpp/tf_utils.h
+)
+target_link_libraries(tf_utils
+  ${TensorFlow_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
+add_library(optical_flow_tf_model
+  flowthrone/cpp/optical_flow_tf_model.cpp
+  flowthrone/cpp/optical_flow_tf_model.h
+)
+target_link_libraries(optical_flow_tf_model
+  tf_utils
+  flowthrone
+  ${TensorFlow_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
 # Binaries
 add_executable(optical_flow_tool flowthrone/cpp/optical_flow_tool.cpp)
 target_link_libraries(optical_flow_tool
@@ -109,6 +136,18 @@ target_link_libraries(evaluation_main
   ${GLOG_LIBRARIES}
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}
+)
+
+add_executable(tensorflow_model_main 
+               flowthrone/cpp/tensorflow_model_main.cpp)
+target_link_libraries(tensorflow_model_main
+  tf_utils
+  flowthrone
+  optical_flow_tf_model
+  ${TensorFlow_LIBRARIES}
+  ${Protobuf_LIBRARIES}
+  ${GLOG_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
 )
 
 # Test definitions.
@@ -145,6 +184,15 @@ target_link_libraries(utils_test
   ${OpenCV_LIBS}
 )
 
+add_executable(tf_utils_test flowthrone/cpp/tf_utils_test.cpp)
+target_link_libraries(tf_utils_test
+  tf_utils
+  test_utils
+  ${GTEST_BOTH_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+)
+
+
 
 # List of tests.
 enable_testing()
@@ -152,3 +200,5 @@ add_test(io_test io_test)
 add_test(visualization_test visualization_test)
 add_test(evaluation_test evaluation_test)
 add_test(utils_test utils_test)
+add_test(tf_utils_tets tf_utils_test)
+
