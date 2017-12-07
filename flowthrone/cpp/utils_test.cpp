@@ -52,4 +52,53 @@ TEST(ResampleFlow, Correct) {
   EXPECT_EQ(cv::Size(100, 50), uv_resampled.size());
 }
 
+TEST(SplitImageTest, SimpleCorrect) {
+  int n = 20;
+  int k = 5;
+  cv::Size image_size(k * n, n);
+  cv::Size patch_size(n, n);
+  std::vector<cv::Rect> tiles = SplitImage(image_size, patch_size, patch_size);
+  ASSERT_EQ(k, tiles.size());
+  for (int i = 0; i < k; ++i) {
+    ASSERT_EQ(cv::Rect(n * i, 0, n, n), tiles[i]);
+  }
+}
+
+TEST(SplitImageTest, NonIntegralSplit) {
+  cv::Size image_size(110, 50);
+  cv::Size patch_size(50, 50);
+  cv::Size stride_size(25, 25);
+
+  std::vector<cv::Rect> tiles = SplitImage(image_size, patch_size, stride_size,
+                                           SplitImageMode::kSizeConstant);
+  ASSERT_EQ(4, tiles.size());
+  ASSERT_EQ(cv::Rect(0, 0, 50, 50), tiles[0]);
+  ASSERT_EQ(cv::Rect(25, 0, 50, 50), tiles[1]);
+  ASSERT_EQ(cv::Rect(50, 0, 50, 50), tiles[2]);
+  ASSERT_EQ(cv::Rect(60, 0, 50, 50), tiles[3]);
+  // Note that the stride is not respected near the right edge of the image.
+}
+
+TEST(SplitImageTest, NonIntegralSplit2) {
+  cv::Size image_size(110, 50);
+  cv::Size patch_size(50, 50);
+  cv::Size stride_size(25, 25);
+
+  std::vector<cv::Rect> tiles = SplitImage(image_size, patch_size, stride_size,
+                                           SplitImageMode::kStrideConstant);
+  ASSERT_EQ(10, tiles.size());
+
+  ASSERT_EQ(cv::Rect(0, 0, 50, 50), tiles[0]);
+  ASSERT_EQ(cv::Rect(25, 0, 50, 50), tiles[1]);
+  ASSERT_EQ(cv::Rect(50, 0, 50, 50), tiles[2]);
+  ASSERT_EQ(cv::Rect(75, 0, 35, 50), tiles[3]);
+  ASSERT_EQ(cv::Rect(100, 0, 10, 50), tiles[4]);
+
+  ASSERT_EQ(cv::Rect(0, 25, 50, 25), tiles[5]);
+  ASSERT_EQ(cv::Rect(25, 25, 50, 25), tiles[6]);
+  ASSERT_EQ(cv::Rect(50, 25, 50, 25), tiles[7]);
+  ASSERT_EQ(cv::Rect(75, 25, 35, 25), tiles[8]);
+  ASSERT_EQ(cv::Rect(100, 25, 10, 25), tiles[9]);
+}
+
 }  // namespace flowthrone
