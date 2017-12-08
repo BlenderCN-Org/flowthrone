@@ -9,15 +9,12 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
-
 #include "gflags/gflags.h"
-
+#include "glog/logging.h"
 #include "tf_utils.h"
 #include "visualization.h"
 #include "io.h"
 #include "optical_flow_tf_model.h"
-// Always include logging last, to avoid warnings about re-defined macros.
-#include "glog/logging.h"
 
 DEFINE_string(video, "", "Path to a video file.");
 DEFINE_string(img1, "", "Filename of image1");
