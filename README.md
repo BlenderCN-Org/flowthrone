@@ -15,3 +15,7 @@ Then you can build the package:
     $ make all                                                                  
     $ make test 
 
+## primo
+To try running/visualizing optical flow:
+    
+    $ ./optical_flow_main --helpshort
