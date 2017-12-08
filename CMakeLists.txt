@@ -36,6 +36,7 @@ include_directories(
 
 # Libraries begin here.
 add_library(flowthrone STATIC
+  flowthrone/cpp/optical_flow_model.h
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
   flowthrone/cpp/visualization.cpp
@@ -64,6 +65,15 @@ add_library(test_utils STATIC
 )
 target_link_libraries(test_utils
   ${GLOG_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
+# Binaries
+add_executable(optical_flow_main flowthrone/cpp/optical_flow_main.cpp)
+target_link_libraries(optical_flow_main
+  flowthrone
+  ${GLOG_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}
 )
 
