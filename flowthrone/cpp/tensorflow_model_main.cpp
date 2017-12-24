@@ -19,12 +19,15 @@
 DEFINE_string(video, "", "Path to a video file.");
 DEFINE_string(img1, "", "Filename of image1");
 DEFINE_string(img2, "", "Filename of image2");
-DEFINE_string(export_dir, "/home/vasiliy/Sandbox/flowthrone/model_v2/",
+DEFINE_string(export_dir,
+              "/home/vasiliy/Sandbox/flowthrone/"
+              "model_128x128/",
               "Path to the directory with SavedModel");
 DEFINE_string(output_image, "", "Output image filename");
 DEFINE_string(output_video, "", "Output video filename");
 DEFINE_bool(visualize, false,
             "Whether the results should be visualized or not.");
+DEFINE_double(resize_input, 1.0, "Fraction by which input should be resized.");
 
 namespace tf = tensorflow;
 
@@ -106,7 +109,7 @@ class VideoFeeder : public Feeder {
     cv::Mat img;
     video_.grab();
     bool success = video_.retrieve(img);
-    cv::resize(img, img, cv::Size(), 0.5, 0.5);
+    cv::resize(img, img, cv::Size(), FLAGS_resize_input, FLAGS_resize_input);
     *output = img;
     return success;
   }
@@ -123,6 +126,8 @@ class ImageFeeder : public Feeder {
       CHECK(images_.back().total())
           << "Failed reading image '" << fn
           << "' maybe the file does not exist, or is not an image?";
+      cv::resize(images_.back(), images_.back(), cv::Size(), FLAGS_resize_input,
+                 FLAGS_resize_input);
     }
   }
   bool next(cv::Mat* output) override {
