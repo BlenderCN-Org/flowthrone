@@ -20,6 +20,15 @@ cv::Mat WarpWithFlow(const cv::Mat& I, const cv::Mat& flow);
 //   cv::resize(input, output, target_size) * target_size / input.size()
 cv::Mat ResampleFlow(const cv::Mat& flow, const cv::Size& target_size);
 
+// Like MATLAB's linspace -- returns a vector of values equally spaced
+// between min and max (inclusively).
+std::vector<float> Linspace(float min, float max, int num);
+
+// Returns a grid of (x, y) values. The grid is laid out row-by-row
+// (i.e. x coordinate is changing the fastest).
+std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
+                                              const std::vector<float>& y);
+
 // When splitting the image, whether to enforce that the stride size should
 // be constant, or whether the patch size should be constant.
 // Consider splitting a 20x15 image into 15x15 patches. If stride is kept

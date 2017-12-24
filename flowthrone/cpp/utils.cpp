@@ -39,17 +39,50 @@ cv::Mat ResampleFlow(const cv::Mat& flow, const cv::Size& target_size) {
   return flow_out;
 }
 
+std::vector<float> Linspace(float min, float max, int num) {
+  if (num == 0) {
+    return {};
+  }
+  if (num == 1 && (min == max)) {
+    return {min};
+  }
+  CHECK_LT(min, max)
+      << "Asked to linspace points where 'smaller' value > 'larger' value.";
+  CHECK_LT(1, num) << "If min/max are distinct, then must have at least two "
+                      "points as input to "
+                      "linspace. ";
+  std::vector<float> out(num);
+  float dx = (max - min) / (num - 1);
+  for (int i = 0; i < num; ++i) {
+    out[i] = min + i * dx;
+  }
+  return out;
+}
+
+std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
+                                              const std::vector<float>& y) {
+  if (x.empty() || y.empty()) {
+    return {};
+  }
+  std::vector<std::pair<float, float>> out;
+  out.reserve(x.size() * y.size());
+  for (float yy : y) {
+    for (float xx : x) {
+      out.emplace_back(xx, yy);
+    }
+  }
+  return out;
+}
+
 std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
                                  cv::Size stride, SplitImageMode mode) {
   CHECK(stride.width >= 1 && stride.height >= 1) << "Stride must be positive.";
   CHECK(image_sz.width >= patch_sz.width && image_sz.height >= patch_sz.height)
       << "Currently only support tiling of images that are at least as large "
-         "as "
-         "the patch size.";
+         "as the patch size.";
   CHECK(patch_sz.width >= stride.width && patch_sz.height >= stride.height)
       << "Patch must be larger than stride. In other words, it is only "
-         "possible "
-         "to densely tile the image.";
+         "possible to densely tile the image.";
 
   std::vector<std::pair<int, int>> y_offset_and_sz{{0, patch_sz.height}};
   std::vector<std::pair<int, int>> x_offset_and_sz{{0, patch_sz.width}};

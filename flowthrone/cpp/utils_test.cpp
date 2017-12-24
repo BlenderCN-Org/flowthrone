@@ -101,4 +101,26 @@ TEST(SplitImageTest, NonIntegralSplit2) {
   ASSERT_EQ(cv::Rect(100, 25, 10, 25), tiles[9]);
 }
 
+TEST(Linspace, Works) {
+  ASSERT_EQ(std::vector<float>({1, 2, 3}), Linspace(1, 3, 3));
+  ASSERT_EQ(std::vector<float>({10}), Linspace(10, 10, 1));
+  ASSERT_EQ(std::vector<float>(), Linspace(10, 10, 0));
+  ASSERT_EQ(std::vector<float>({1, 3, 5, 7, 9}), Linspace(1, 9, 5));
+}
+
+TEST(Meshgrid, Works) {
+  using std::pair;
+  using std::vector;
+  vector<pair<float, float>> expected;
+
+  expected = vector<pair<float, float>>();
+  ASSERT_EQ(expected, Meshgrid(vector<float>(), vector<float>()));
+
+  expected = vector<pair<float, float>>{{1, 0}, {2, 0}};
+  ASSERT_EQ(expected, Meshgrid(vector<float>({1, 2}), vector<float>({0})));
+
+  expected = vector<pair<float, float>>{{1, 3}, {2, 3}, {1, 4}, {2, 4}};
+  ASSERT_EQ(expected, Meshgrid(vector<float>({1, 2}), vector<float>({3, 4})));
+}
+
 }  // namespace flowthrone
