@@ -1,6 +1,29 @@
+// A single .proto file containing all messages.
 syntax = "proto2";
-
 package flowthrone;
+option cc_enable_arenas = true;
+
+// Set of parameters for OpticalFlowTensorFlowModel class.
+message OpticalFlowTensorFlowModelOptions {
+  // Path to the directory containing tensorflow SavedModelBundle.
+  // The model should have two inputs named "x1" and "x2" and an output named
+  // "prediction".
+  // TODO: This restriction should be lifted in the future.
+  optional string export_dir = 1;
+
+  // Whether should perform inference in 'one-shot' -- single evaluation of the
+  // network over a pair of images, of whether image should be split into a
+  // collection of windows, which are then fed to the network.
+  // Setting the parameter to true is obviously more expensive, but will likely
+  // give nicer results.
+  optional bool sliding_window = 2 [default = true];
+  // Stride used when sliding_window is set to true. Values larger than 1.0 are
+  // discouraged (since it implies that windows have gaps, which does not
+  // really make sense). When set to 1.0, there is no overlap, and you might
+  // see undesireable artifacts at the boundary.
+  optional double window_stride = 3 [default = 1.0];
+};
+
 
 // Message for specifying a collection of image pair / groundtruth triplets,
 // to be used for evaluation.

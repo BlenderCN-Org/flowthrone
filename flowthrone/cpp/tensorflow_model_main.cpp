@@ -44,9 +44,10 @@ int main(int argc, char** argv) {
   CHECK(!FLAGS_export_dir.empty())
       << "You must provide a tensorflow graph definition to be able to run "
          "binary. ";
-  OpticalFlowTensorFlowModel::Options options;
-  options.stride_fraction = 0.25;  // 25;
-  options.export_dir = FLAGS_export_dir;
+  OpticalFlowTensorFlowModelOptions options;
+  options.set_sliding_window(true);
+  options.set_window_stride(0.5);
+  options.set_export_dir(FLAGS_export_dir);
 
   OpticalFlowTensorFlowModel model(options);
 
@@ -77,7 +78,7 @@ int main(int argc, char** argv) {
       LOG(INFO) << "Computing flow.";
     }
     cv::Mat predicted_flow;
-    model.Run(images[0], images[1], predicted_flow);
+    CHECK(model.Run(images[0], images[1], &predicted_flow));
 
     // Visualizations/output.
     cv::Mat flow_vis = ComputeFlowColor(predicted_flow);

@@ -16,10 +16,12 @@ Using tensorflow is a whole separate meal; the steps are roughly:
   2. Run `build_and_install_tensorflow.py` which will install a tensorflow 
      shared library on your system.
   3. Install the same version of Protobuf and Eigen that came with tensorflow.
-     [tensorflow-cmake](https://github.com/cjweeks/tensorflow-cmake) repo will
-     be useful here. Alternatively, grep `tensorflow/workspace.bzl` for 
+     It will be easier to download and install from archives in 
+     `cmake/Protobuf_VERSION.cmake` and `Eigen_VERSION.cmake`.
+     (Alternatively, grep `tensorflow/workspace.bzl` for 
      `eigen_archive` and `protobuf_archive` and install both libraries from
-     those specific tarballs.
+     those specific tarballs -- which will be the same as those in `.cmake`
+     files).
 
 ## antipasto
 

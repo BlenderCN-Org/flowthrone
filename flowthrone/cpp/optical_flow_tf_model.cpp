@@ -89,12 +89,12 @@ cv::Mat TriangleKernel(cv::Size size) {
 }
 
 }  // namespace
-using Options = OpticalFlowTensorFlowModel::Options;
 
-OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(const Options& opts)
+OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(
+    const OpticalFlowTensorFlowModelOptions& opts)
     : opts_(opts) {
   const std::string kModelTag = "train";
-  InitializeFromSavedModel(opts.export_dir, kModelTag);
+  InitializeFromSavedModel(opts_.export_dir(), kModelTag);
 }
 
 OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {
@@ -125,7 +125,7 @@ void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
 }
 
 bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
-                                     cv::Mat& flow) {
+                                     cv::Mat* flow) {
   CheckNumberOfChannels(I0, input_shape_.dim_size(2));
   CheckNumberOfChannels(I1, input_shape_.dim_size(2));
   cv::Mat I0f = MaybeConvertTo32F(I0);
@@ -136,7 +136,7 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
   inputs.push_back(std::make_pair(input_names_[1], tf::Tensor()));
   std::vector<tf::Tensor> outputs;
 
-  if (!opts_.sliding_window) {
+  if (!opts_.sliding_window()) {
     cv::Size sz(input_shape_.dim_size(0), input_shape_.dim_size(1));
     cv::resize(I0f, I0f, sz);
     cv::resize(I1f, I1f, sz);
@@ -146,20 +146,21 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
     CHECK_STATUS(session_->Run(inputs, {output_name_}, {}, &outputs));
     CHECK_EQ(1, outputs.size());
     const tf::Tensor& output = outputs[0];
-    AsMat(output, &flow);
-    cv::resize(flow, flow, I0.size());
+    AsMat(output, flow);
+    cv::resize(*flow, *flow, I0.size());
   } else {
     cv::Size patch_sz(input_shape_.dim_size(0), input_shape_.dim_size(1));
-    int stride_x = patch_sz.width * opts_.stride_fraction;
-    int stride_y = patch_sz.height * opts_.stride_fraction;
+    int stride_x = patch_sz.width * opts_.window_stride();
+    int stride_y = patch_sz.height * opts_.window_stride();
     std::vector<cv::Rect> patch_locations =
         SplitImage(I0.size(), patch_sz, cv::Size(stride_x, stride_y),
                    SplitImageMode::kStrideConstant);
-    flow = cv::Mat(I0.size(), CV_32FC2, cv::Scalar(0.0f));
+    *flow = cv::Mat(I0.size(), CV_32FC2, cv::Scalar(0.0f));
     cv::Mat counts = cv::Mat(I0.size(), CV_32FC1, cv::Scalar(0));
 
     cv::Mat kernel = TriangleKernel(cv::Size(64, 64));
     for (const auto& rect : patch_locations) {
+      // THIS IS WRONG WHENEVER THE NETWORK SHAPE DOES NOT ACCEPT 64x46 PATCHES.
       cv::Mat I0f_patch = I0f(rect);
       cv::Mat I1f_patch = I1f(rect);
       cv::resize(I0f_patch, I0f_patch, cv::Size(64, 64));
@@ -179,13 +180,13 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
       cv::Mat kernel_32fc2;
       cv::merge(std::vector<cv::Mat>{this_kernel, this_kernel}, kernel_32fc2);
       cv::multiply(flow_patch, kernel_32fc2, flow_patch);
-      cv::add(flow(rect), flow_patch, flow(rect));
+      // TODO: fix insane syntax
+      cv::add((*flow)(rect), flow_patch, (*flow)(rect));
       cv::add(counts(rect), this_kernel, counts(rect));
     }
     cv::Mat counts_32fc2;
-    // counts.convertTo(counts, CV_32F);
     cv::merge(std::vector<cv::Mat>{counts, counts}, counts_32fc2);
-    flow = flow / counts_32fc2;
+    *flow = *flow / counts_32fc2;
   }
   return true;
 }

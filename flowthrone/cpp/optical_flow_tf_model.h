@@ -1,10 +1,12 @@
 #pragma once
 #include "opencv2/core/core.hpp"
 #include "tensorflow/core/public/session.h"
+#include "optical_flow_model.h"
+#include "flowthrone.pb.h"
 
 namespace flowthrone {
 
-class OpticalFlowTensorFlowModel {
+class OpticalFlowTensorFlowModel : public OpticalFlowModel {
  public:
   struct Options {
     std::string export_dir;
@@ -12,16 +14,16 @@ class OpticalFlowTensorFlowModel {
     double stride_fraction = 0.5;
   };
 
-  OpticalFlowTensorFlowModel(const Options& opt);
-  ~OpticalFlowTensorFlowModel();
+  OpticalFlowTensorFlowModel(const OpticalFlowTensorFlowModelOptions& opt);
+  virtual ~OpticalFlowTensorFlowModel();
 
-  bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat& flow);
+  bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow) override;
 
  private:
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
 
-  Options opts_;
+  OpticalFlowTensorFlowModelOptions opts_;
 
   std::unique_ptr<tensorflow::Session> session_;
 

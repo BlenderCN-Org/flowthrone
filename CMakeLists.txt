@@ -32,7 +32,6 @@ find_package(Protobuf REQUIRED)
 find_package(Eigen)
 find_package(TensorFlow)
 
-
 include_directories(
   ${GTEST_INCLUDE_DIRS}
   ${GLOG_INCLUDE_DIRS}
@@ -105,6 +104,7 @@ add_library(optical_flow_tf_model
 target_link_libraries(optical_flow_tf_model
   tf_utils
   flowthrone
+  flowthrone_proto
   ${TensorFlow_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -138,8 +138,8 @@ target_link_libraries(evaluation_main
   ${OpenCV_LIBS}
 )
 
-add_executable(tensorflow_model_main 
-               flowthrone/cpp/tensorflow_model_main.cpp)
+add_executable(tensorflow_model_tool 
+               flowthrone/cpp/tensorflow_model_tool.cpp)
 target_link_libraries(tensorflow_model_main
   tf_utils
   flowthrone
@@ -193,7 +193,6 @@ target_link_libraries(tf_utils_test
 )
 
 
-
 # List of tests.
 enable_testing()
 add_test(io_test io_test)
@@ -201,4 +200,3 @@ add_test(visualization_test visualization_test)
 add_test(evaluation_test evaluation_test)
 add_test(utils_test utils_test)
 add_test(tf_utils_tets tf_utils_test)
-
