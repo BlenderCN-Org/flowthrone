@@ -74,6 +74,22 @@ std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
   return out;
 }
 
+cv::Mat TriangleKernel(cv::Size size) {
+  int xc = size.width / 2;
+  int yc = size.height / 2;
+  cv::Mat tri(size, CV_32FC1);
+  for (int y = 0; y < tri.rows; ++y) {
+    float* row = reinterpret_cast<float*>(tri.row(y).data);
+    float wy = yc > 0 ? 1.0f - std::abs(y - yc) / float(yc) : 1.0f;
+    for (int x = 0; x < tri.cols; ++x) {
+      float wx = xc > 0 ? 1.0f - std::abs(x - xc) / float(xc) : 1.0f;
+      row[x] = wx * wy;
+    }
+  }
+  return tri;
+}
+
+
 std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
                                  cv::Size stride, SplitImageMode mode) {
   CHECK(stride.width >= 1 && stride.height >= 1) << "Stride must be positive.";

@@ -8,12 +8,6 @@ namespace flowthrone {
 
 class OpticalFlowTensorFlowModel : public OpticalFlowModel {
  public:
-  struct Options {
-    std::string export_dir;
-    bool sliding_window = true;
-    double stride_fraction = 0.5;
-  };
-
   OpticalFlowTensorFlowModel(const OpticalFlowTensorFlowModelOptions& opt);
   virtual ~OpticalFlowTensorFlowModel();
 
@@ -22,6 +16,19 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
  private:
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
+
+  // Helper for running inference that resizes input/output images before/after
+  // running inference.
+  // Note: this function will perform some unnecessary allocation when running
+  // the network multiple times.
+  // input_size -- size that images should be resized to prior to sending to
+  //               the network.
+  // target_size -- size that output image should be resized to after being
+  //                received from the network.
+  // Both images must have type CV_32F, but of arbitrary size.
+  // Output image will be CV_32FC2, and will be resized to target_size.
+  void RunInference(const cv::Size& input_size, const cv::Size& target_size,
+                    const cv::Mat& I0f, const cv::Mat& I1f, cv::Mat* output);
 
   OpticalFlowTensorFlowModelOptions opts_;
 

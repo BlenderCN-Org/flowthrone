@@ -29,6 +29,10 @@ std::vector<float> Linspace(float min, float max, int num);
 std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
                                               const std::vector<float>& y);
 
+// Returns a matrix whose value is 1 at the center, and whose values decrease
+// (bilinearly) to zero at the boundaries.
+cv::Mat TriangleKernel(cv::Size size);
+
 // When splitting the image, whether to enforce that the stride size should
 // be constant, or whether the patch size should be constant.
 // Consider splitting a 20x15 image into 15x15 patches. If stride is kept

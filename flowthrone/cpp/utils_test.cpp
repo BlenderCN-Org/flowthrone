@@ -123,4 +123,31 @@ TEST(Meshgrid, Works) {
   ASSERT_EQ(expected, Meshgrid(vector<float>({1, 2}), vector<float>({3, 4})));
 }
 
+TEST(TriangleKernel, Works) {
+  cv::Mat kernel, expected_kernel;
+
+  // 4x1 kernel
+  kernel = TriangleKernel(cv::Size(4,1));
+  std::vector<float> values{0.0f, 0.5f, 1.0f, 0.5f};
+  expected_kernel = cv::Mat(1, 4, CV_32FC1);
+  for (size_t i = 0; i < values.size(); ++i) {
+    expected_kernel.at<float>(0, i) = values[i];
+  }
+  ASSERT_EQ(cv::Size(4, 1), kernel.size());
+  ASSERT_EQ(0.0, cv::norm(kernel - expected_kernel));
+  
+  // 3x3 kernel 
+  kernel = TriangleKernel(cv::Size(3,3));
+  expected_kernel = cv::Mat::zeros(3, 3, CV_32FC1);
+  expected_kernel.at<float>(1, 1) = 1.0f;
+  ASSERT_EQ(cv::Size(3, 3), kernel.size());
+  ASSERT_EQ(CV_32F, kernel.type());
+  ASSERT_EQ(0.0, cv::norm(kernel - expected_kernel));
+  
+  // Identity kernel.
+  kernel = TriangleKernel(cv::Size(1,1));
+  ASSERT_EQ(cv::Size(1,1), kernel.size());
+  ASSERT_EQ(1.0f, kernel.at<float>(0, 0));
+}
+
 }  // namespace flowthrone
