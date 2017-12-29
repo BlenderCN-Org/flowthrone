@@ -89,7 +89,6 @@ cv::Mat TriangleKernel(cv::Size size) {
   return tri;
 }
 
-
 std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
                                  cv::Size stride, SplitImageMode mode) {
   CHECK(stride.width >= 1 && stride.height >= 1) << "Stride must be positive.";

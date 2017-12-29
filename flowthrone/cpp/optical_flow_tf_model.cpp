@@ -107,17 +107,17 @@ void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
   output_shape_ = GetTensorShape(GetTensorShapeProto(graph_def, output_name_));
 }
 
-
-void OpticalFlowTensorFlowModel::RunInference(
-    const cv::Size& input_size, const cv::Size& target_size,
-    const cv::Mat& I0f_in, const cv::Mat& I1f_in, cv::Mat* flow) {
- 
+void OpticalFlowTensorFlowModel::RunInference(const cv::Size& input_size,
+                                              const cv::Size& target_size,
+                                              const cv::Mat& I0f_in,
+                                              const cv::Mat& I1f_in,
+                                              cv::Mat* flow) {
   std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
   inputs_tf.push_back(std::make_pair(input_names_[0], tf::Tensor()));
   inputs_tf.push_back(std::make_pair(input_names_[1], tf::Tensor()));
   std::vector<tf::Tensor> outputs_tf;
 
-  cv::Mat I0f, I1f; 
+  cv::Mat I0f, I1f;
   cv::resize(I0f_in, I0f, input_size);
   cv::resize(I1f_in, I1f, input_size);
   AsTensor(I0f, &inputs_tf[0].second);
@@ -147,7 +147,7 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
     int stride_y = patch_sz.height * opts_.window_stride();
     std::vector<cv::Rect> patch_locations =
         SplitImage(I0.size(), patch_sz, cv::Size(stride_x, stride_y),
-                   SplitImageMode::kStrideConstant);
+                   SplitImageMode::kSizeConstant);
     *flow = cv::Mat(I0.size(), CV_32FC2, cv::Scalar(0.0f));
     cv::Mat counts = cv::Mat(I0.size(), CV_32FC1, cv::Scalar(0));
 

@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
          "binary. ";
   OpticalFlowTensorFlowModelOptions options;
   options.set_sliding_window(true);
-  options.set_window_stride(0.5);
+  options.set_window_stride(0.25);
   options.set_export_dir(FLAGS_export_dir);
 
   OpticalFlowTensorFlowModel model(options);
