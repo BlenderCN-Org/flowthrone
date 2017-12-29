@@ -4,6 +4,8 @@
 // ICCV 2007.
 #pragma once
 #include <opencv2/core/core.hpp>
+#include <google/protobuf/repeated_field.h>
+#include "flowthrone.pb.h"
 
 namespace flowthrone {
 
@@ -23,5 +25,11 @@ float FlowEndpointError(const cv::Mat& flow, const cv::Mat& flow_gt,
 // specified, 'flow_error' will be CV_32FC1.
 float FlowAngularError(const cv::Mat& flow, const cv::Mat& flow_gt,
                        cv::Mat* flow_error = nullptr);
+
+// Given a collection of results for each image pair, computes average summary
+// statistics.
+EvaluationOutput::Result ComputeAverageSummary(
+    const google::protobuf::RepeatedPtrField<EvaluationOutput::Result>&
+        results);
 
 }  // namespace flowthrone

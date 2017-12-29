@@ -1,0 +1,35 @@
+syntax = "proto2";
+
+package flowthrone;
+
+// Message for specifying a collection of image pair / groundtruth triplets,
+// to be used for evaluation.
+message EvaluationInput {
+  message Datum {
+    // Path to the first and second image on which flow should be computed.
+    optional string image0_filename = 1;
+    optional string image1_filename = 2;
+    // Path to .flo file with groundtruth.
+    optional string gt_filename = 3;
+    // Identifier (e.g. sequence/image name).
+    optional string identifier = 4;
+  }
+  repeated Datum datum = 1;
+}
+
+// Message for storing evaluation results.
+message EvaluationOutput {
+  // Per-datum evaluation result.
+  message Result {
+    optional float average_angular_error = 1;
+    optional float average_endpoint_error = 2;
+    // Time it took to compute the result in seconds.
+    optional float elapsed = 4;
+    // Name of the image pair.
+    optional string identifier = 3;
+  }
+  // Per-image pair result.
+  repeated Result result = 1;
+  // Average results.
+  optional Result average_summary = 2;
+}

@@ -21,18 +21,30 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(cmake/FindGlog.cmake)
 include(cmake/FindGFlags.cmake)
 
+find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(OpenCV REQUIRED COMPONENTS opencv_core opencv_highgui opencv_imgproc opencv_video)
 find_package(GTest REQUIRED)
 find_package(GFlags REQUIRED)
 find_package(Glog REQUIRED)
+find_package(Protobuf REQUIRED)
 
 include_directories(
   ${GTEST_INCLUDE_DIRS}
   ${GLOG_INCLUDE_DIRS}
   ${GFLAGS_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIR}
+  ${Protobuf_INCLUDE_DIRS}
+  ${BOost_INCLUDE_DIRS}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+link_directories(
+  ${Boost_LIBRARY_DIRS}
+)
+
+protobuf_generate_cpp(PROTO_SRC PROTO_HEADER "flowthrone/proto/flowthrone.proto")
+add_library(flowthrone_proto STATIC ${PROTO_SRC} ${PROTO_HEADER})
+target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 
 # Libraries begin here.
 add_library(flowthrone STATIC
@@ -46,6 +58,7 @@ add_library(flowthrone STATIC
 )
 
 target_link_libraries(flowthrone
+  flowthrone_proto
   ${GLOG_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -55,6 +68,7 @@ add_library(evaluation STATIC
   flowthrone/cpp/evaluation.h
 )
 target_link_libraries(evaluation
+  flowthrone_proto
   ${GLOG_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -69,9 +83,19 @@ target_link_libraries(test_utils
 )
 
 # Binaries
-add_executable(optical_flow_main flowthrone/cpp/optical_flow_main.cpp)
-target_link_libraries(optical_flow_main
+add_executable(optical_flow_tool flowthrone/cpp/optical_flow_tool.cpp)
+target_link_libraries(optical_flow_tool
   flowthrone
+  ${GLOG_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
+add_executable(evaluation_tool flowthrone/cpp/evaluation_tool)
+target_link_libraries(evaluation_tool
+  flowthrone
+  evaluation
+  ${Boost_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}

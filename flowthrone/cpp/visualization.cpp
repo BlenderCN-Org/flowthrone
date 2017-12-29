@@ -93,6 +93,15 @@ cv::Mat HorizontalConcat(const cv::Mat& x, const cv::Mat& y) {
   return out;
 }
 
+cv::Mat HorizontalConcat(const cv::Mat& i0, const cv::Mat& i1,
+                         const cv::Mat& i2) {
+  CHECK(i0.rows == i1.rows && i1.rows == i2.rows);
+  CHECK(i0.type() == i1.type() && i1.type() == i2.type());
+  cv::Mat out;
+  cv::hconcat(std::vector<cv::Mat>{i0, i1, i2}, out);
+  return out;
+}
+
 cv::Mat VerticalConcat(const cv::Mat& x, const cv::Mat& y) {
   CHECK_EQ(x.cols, y.cols);
   CHECK_EQ(x.type(), y.type());
