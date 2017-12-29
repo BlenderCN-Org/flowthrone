@@ -70,7 +70,8 @@ int main(int argc, char** argv) {
   options.set_window_stride(0.25);
   options.set_export_dir("/home/vasiliy/Sandbox/flowthrone/model_128x128v2");
 
-  std::unique_ptr<OpticalFlowModel> solver(new OpticalFlowTensorFlowModel(options));
+  std::unique_ptr<OpticalFlowModel> solver(
+      new OpticalFlowTensorFlowModel(options));
 
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());

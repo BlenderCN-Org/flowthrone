@@ -22,7 +22,7 @@ struct Context {
                         const tensorflow::GraphDef& graph_def);
 };
 
-} // namespace internal
+}  // namespace internal
 
 class OpticalFlowTensorFlowModel : public OpticalFlowModel {
  public:
@@ -32,7 +32,6 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow) override;
 
  private:
-
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
 
@@ -47,14 +46,14 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   //                received from the network.
   // Both images must have type CV_32F, but of arbitrary size.
   // Output image will be CV_32FC2, and will be resized to target_size.
-  void RunInference(tensorflow::Session& session, const internal::Context& context,
-                    const cv::Mat& I0f, const cv::Mat& I1f, cv::Mat* output);
-  
+  void RunInference(tensorflow::Session& session,
+                    const internal::Context& context, const cv::Mat& I0f,
+                    const cv::Mat& I1f, cv::Mat* output);
+
   OpticalFlowTensorFlowModelOptions opts_;
 
   std::unique_ptr<tensorflow::Session> session_;
   internal::Context context_;
 };
-
 
 }  // namespace flowthrone

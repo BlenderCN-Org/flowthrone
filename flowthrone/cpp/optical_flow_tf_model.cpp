@@ -87,17 +87,17 @@ OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {
   }
 }
 
-Context Context::Create(
-    const OpticalFlowTensorFlowModelOptions& opts, const tf::GraphDef& graph_def) {
+Context Context::Create(const OpticalFlowTensorFlowModelOptions& opts,
+                        const tf::GraphDef& graph_def) {
   Context context;
   // TODO: normally these would be read from the options.
   context.input_names = std::vector<std::string>{"x1", "x2"};
   context.output_name = "prediction";
 
-  context.input_shape = GetInputTensorShape(graph_def, 
-      context.input_names[0], context.input_names[1]);
-  context.output_shape = GetTensorShape(
-      GetTensorShapeProto(graph_def, context.output_name));
+  context.input_shape = GetInputTensorShape(graph_def, context.input_names[0],
+                                            context.input_names[1]);
+  context.output_shape =
+      GetTensorShape(GetTensorShapeProto(graph_def, context.output_name));
   // TODO: cv::Size(width, height). Is input_shape.dim_size() the same?
   context.input_size = cv::Size(context.input_shape.dim_size(0),
                                 context.input_shape.dim_size(1));
@@ -127,7 +127,7 @@ void OpticalFlowTensorFlowModel::RunInference(tf::Session& session,
   // Size of the input fed into this function.
   // This will be used to resize the output.
   cv::Size original_input_output_size = I0f_in.size();
-  
+
   std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
   inputs_tf.push_back(std::make_pair(context.input_names[0], tf::Tensor()));
   inputs_tf.push_back(std::make_pair(context.input_names[1], tf::Tensor()));
@@ -144,7 +144,6 @@ void OpticalFlowTensorFlowModel::RunInference(tf::Session& session,
   AsMat(output_tf, flow);
   *flow = ResampleFlow(*flow, original_input_output_size);
 }
-
 
 bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
                                      cv::Mat* flow) {
