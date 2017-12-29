@@ -122,6 +122,7 @@ add_executable(evaluation_tool flowthrone/cpp/evaluation_tool)
 target_link_libraries(evaluation_tool
   flowthrone
   evaluation
+  optical_flow_tf_model
   ${Boost_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${GFLAGS_LIBRARIES}

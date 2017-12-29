@@ -12,6 +12,7 @@
 #include "flowthrone.pb.h"
 #include "optical_flow_model.h"
 #include "visualization.h"
+#include "optical_flow_tf_model.h"
 
 static const std::string gUsageMessage = R"(
 Tool for evaluating optical flow on a collection of images.
@@ -64,7 +65,12 @@ int main(int argc, char** argv) {
   // This would be replaced with the proper instantiation of the class of
   // interest. However currently no algorithms are checked-in, so this binary
   // is simply a stub.
-  std::unique_ptr<OpticalFlowModel> solver(nullptr);
+  OpticalFlowTensorFlowModelOptions options;
+  options.set_sliding_window(true);
+  options.set_window_stride(0.25);
+  options.set_export_dir("/home/vasiliy/Sandbox/flowthrone/model_128x128v2");
+
+  std::unique_ptr<OpticalFlowModel> solver(new OpticalFlowTensorFlowModel(options));
 
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());
@@ -86,9 +92,9 @@ int main(int argc, char** argv) {
       cv::Mat image_blended = 0.5 * I0 + 0.5 * I1;
       cv::Mat flow_vis = ComputeFlowColor(predicted_flow);
       cv::Mat flow_gt_vis = ComputeFlowColor(flow_gt);
-      cv::Mat vis = HorizontalConcat(image_blended, predicted_flow, flow_gt);
+      cv::Mat vis = HorizontalConcat(image_blended, flow_vis, flow_gt_vis);
       std::string image_filename =
-          (base_output_dir / path(datum.identifier() + ".jpg")).string();
+          (base_output_dir / path(datum.identifier() + ".png")).string();
       LOG(INFO) << "Writing " << image_filename;
       cv::imwrite(image_filename, vis);
     }

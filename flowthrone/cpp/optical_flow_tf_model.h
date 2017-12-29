@@ -6,6 +6,24 @@
 
 namespace flowthrone {
 
+namespace internal {
+
+struct Context {
+  std::vector<std::string> input_names;
+  std::string output_name;
+  // Layout is height, width, number-of-channels.
+  tensorflow::TensorShape input_shape;
+  tensorflow::TensorShape output_shape;
+  // cv::Size analogues of the above.
+  cv::Size input_size;
+  cv::Size output_size;
+
+  static Context Create(const OpticalFlowTensorFlowModelOptions& opts,
+                        const tensorflow::GraphDef& graph_def);
+};
+
+} // namespace internal
+
 class OpticalFlowTensorFlowModel : public OpticalFlowModel {
  public:
   OpticalFlowTensorFlowModel(const OpticalFlowTensorFlowModelOptions& opt);
@@ -14,9 +32,11 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow) override;
 
  private:
+
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
 
+  // TODO: DOCUMENTATION OUT-OF-DATE.
   // Helper for running inference that resizes input/output images before/after
   // running inference.
   // Note: this function will perform some unnecessary allocation when running
@@ -27,19 +47,14 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   //                received from the network.
   // Both images must have type CV_32F, but of arbitrary size.
   // Output image will be CV_32FC2, and will be resized to target_size.
-  void RunInference(const cv::Size& input_size, const cv::Size& target_size,
+  void RunInference(tensorflow::Session& session, const internal::Context& context,
                     const cv::Mat& I0f, const cv::Mat& I1f, cv::Mat* output);
-
+  
   OpticalFlowTensorFlowModelOptions opts_;
 
   std::unique_ptr<tensorflow::Session> session_;
-
-  std::vector<std::string> input_names_;
-  std::string output_name_;
-
-  // Layout is height, width, number-of-channels.
-  tensorflow::TensorShape input_shape_;
-  tensorflow::TensorShape output_shape_;
+  internal::Context context_;
 };
+
 
 }  // namespace flowthrone

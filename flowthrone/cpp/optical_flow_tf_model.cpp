@@ -11,6 +11,7 @@
 namespace tf = tensorflow;
 
 namespace flowthrone {
+using internal::Context;
 
 namespace {
 
@@ -86,6 +87,25 @@ OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {
   }
 }
 
+Context Context::Create(
+    const OpticalFlowTensorFlowModelOptions& opts, const tf::GraphDef& graph_def) {
+  Context context;
+  // TODO: normally these would be read from the options.
+  context.input_names = std::vector<std::string>{"x1", "x2"};
+  context.output_name = "prediction";
+
+  context.input_shape = GetInputTensorShape(graph_def, 
+      context.input_names[0], context.input_names[1]);
+  context.output_shape = GetTensorShape(
+      GetTensorShapeProto(graph_def, context.output_name));
+  // TODO: cv::Size(width, height). Is input_shape.dim_size() the same?
+  context.input_size = cv::Size(context.input_shape.dim_size(0),
+                                context.input_shape.dim_size(1));
+  context.output_size = cv::Size(context.output_shape.dim_size(0),
+                                 context.output_shape.dim_size(1));
+  return context;
+}
+
 void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
     const std::string& export_dir, const std::string& tag) {
   CHECK(tf::MaybeSavedModelDirectory(export_dir))
@@ -96,53 +116,49 @@ void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
   CHECK_STATUS(tf::LoadSavedModel(tf::SessionOptions(), tf::RunOptions(),
                                   export_dir, {tag}, &bundle));
   session_ = std::move(bundle.session);
-
-  // These must match names that are specified at training time.
-  input_names_ = std::vector<std::string>{"x1", "x2"};
-  output_name_ = "prediction";
-
-  const tf::GraphDef& graph_def = bundle.meta_graph_def.graph_def();
-  input_shape_ =
-      GetInputTensorShape(graph_def, input_names_[0], input_names_[1]);
-  output_shape_ = GetTensorShape(GetTensorShapeProto(graph_def, output_name_));
+  context_ = Context::Create(opts_, bundle.meta_graph_def.graph_def());
 }
 
-void OpticalFlowTensorFlowModel::RunInference(const cv::Size& input_size,
-                                              const cv::Size& target_size,
+void OpticalFlowTensorFlowModel::RunInference(tf::Session& session,
+                                              const Context& context,
                                               const cv::Mat& I0f_in,
                                               const cv::Mat& I1f_in,
                                               cv::Mat* flow) {
+  // Size of the input fed into this function.
+  // This will be used to resize the output.
+  cv::Size original_input_output_size = I0f_in.size();
+  
   std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
-  inputs_tf.push_back(std::make_pair(input_names_[0], tf::Tensor()));
-  inputs_tf.push_back(std::make_pair(input_names_[1], tf::Tensor()));
+  inputs_tf.push_back(std::make_pair(context.input_names[0], tf::Tensor()));
+  inputs_tf.push_back(std::make_pair(context.input_names[1], tf::Tensor()));
   std::vector<tf::Tensor> outputs_tf;
 
   cv::Mat I0f, I1f;
-  cv::resize(I0f_in, I0f, input_size);
-  cv::resize(I1f_in, I1f, input_size);
+  cv::resize(I0f_in, I0f, context.input_size);
+  cv::resize(I1f_in, I1f, context.input_size);
   AsTensor(I0f, &inputs_tf[0].second);
   AsTensor(I1f, &inputs_tf[1].second);
-  CHECK_STATUS(session_->Run(inputs_tf, {output_name_}, {}, &outputs_tf));
+  CHECK_STATUS(session.Run(inputs_tf, {context.output_name}, {}, &outputs_tf));
   CHECK_EQ(1, outputs_tf.size());
   const tf::Tensor& output_tf = outputs_tf[0];
   AsMat(output_tf, flow);
-  cv::resize(*flow, *flow, target_size);
+  *flow = ResampleFlow(*flow, original_input_output_size);
 }
+
 
 bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
                                      cv::Mat* flow) {
-  CheckNumberOfChannels(I0, input_shape_.dim_size(2));
-  CheckNumberOfChannels(I1, input_shape_.dim_size(2));
+  CheckNumberOfChannels(I0, context_.input_shape.dim_size(2));
+  CheckNumberOfChannels(I1, context_.input_shape.dim_size(2));
   cv::Mat I0f = MaybeConvertTo32F(I0);
   cv::Mat I1f = MaybeConvertTo32F(I1);
 
   if (!opts_.sliding_window()) {
-    cv::Size input_sz(input_shape_.dim_size(0), input_shape_.dim_size(1));
-    cv::Size target_sz(I0.size());
-
-    RunInference(input_sz, target_sz, I0f, I1f, flow);
+    RunInference(*session_, context_, I0f, I1f, flow);
   } else {
-    cv::Size patch_sz(input_shape_.dim_size(0), input_shape_.dim_size(1));
+    // Doesn't __really__ need to be the case.
+    cv::Size patch_sz = context_.input_size;
+
     int stride_x = patch_sz.width * opts_.window_stride();
     int stride_y = patch_sz.height * opts_.window_stride();
     std::vector<cv::Rect> patch_locations =
@@ -158,7 +174,7 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
       cv::Mat I0f_patch = I0f(rect);
       cv::Mat I1f_patch = I1f(rect);
       cv::Mat flow_patch;
-      RunInference(patch_sz, rect.size(), I0f_patch, I1f_patch, &flow_patch);
+      RunInference(*session_, context_, I0f_patch, I1f_patch, &flow_patch);
 
       cv::Mat this_kernel;
       cv::resize(kernel, this_kernel, rect.size());
