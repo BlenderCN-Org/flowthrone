@@ -2,9 +2,12 @@
 
 ## aperitivo
 Follow the standard installation instructions for the following libraries:      
+* [boost](http://www.boost.org/users/download/)
 * [Glog](https://github.com/google/glog) (>=0.3.3)                              
 * [GFlags](https://github.com/gflags/gflags)                                    
 * [Googletest](https://github.com/google/googletest)
+* [Google Protocol Buffers](https://github.com/google/protobuf) 
+  You should use [this version](http://mirror.bazel.build/github.com/google/protobuf/archive/0b059a3d8a8f8aa40dde7bea55edca4ec5dfea66.tar.gz) due to tensorflow compatibility issues, or at the very least it should be >= 3.4.0
 * OpenCV (2.4+)
 
 ## antipasto
@@ -16,6 +19,7 @@ package:
     $ cmake ..                                                                  
     $ make all                                                                  
     $ make test 
+
 
 ## primo
 To try running/visualizing optical flow:

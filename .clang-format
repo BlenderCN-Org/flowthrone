@@ -2,5 +2,8 @@
 Language:        Cpp
 BasedOnStyle:  Google
 DerivePointerAlignment: false
+---
+Language: Proto
+ColumnLimit: 80
 ...
 

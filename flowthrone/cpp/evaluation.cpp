@@ -16,7 +16,8 @@ void CheckForSanityErrors(const cv::Mat& flow, const cv::Mat& flow_gt) {
 bool IsInvalidWarp(const cv::Vec2f& uv) {
   return std::isnan(uv[0]) || std::isnan(uv[1]);
 }
-}
+
+}  // namespace
 
 float FlowEndpointError(const cv::Mat& flow, const cv::Mat& flow_gt,
                         cv::Mat* flow_error) {
@@ -72,6 +73,24 @@ float FlowAngularError(const cv::Mat& flow, const cv::Mat& flow_gt,
     *flow_error = error;
   }
   return sum_of_errors / (flow.rows * flow.cols);
+}
+
+EvaluationOutput::Result ComputeAverageSummary(
+    const google::protobuf::RepeatedPtrField<EvaluationOutput::Result>&
+        results) {
+  double ee = 0;
+  double ae = 0;
+  double elapsed = 0;
+  for (const auto& result : results) {
+    ee += result.average_endpoint_error() / results.size();
+    ae += result.average_angular_error() / results.size();
+    elapsed += result.elapsed() / results.size();
+  }
+  EvaluationOutput::Result summary;
+  summary.set_average_angular_error(ae);
+  summary.set_average_endpoint_error(ee);
+  summary.set_elapsed(elapsed);
+  return summary;
 }
 
 }  // namespace flowthrone
