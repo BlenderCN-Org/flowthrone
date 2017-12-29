@@ -52,6 +52,7 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
 
   OpticalFlowTensorFlowModelOptions opts_;
 
+  // These two can form a single class, and RunInference can be its member.
   std::unique_ptr<tensorflow::Session> session_;
   internal::Context context_;
 };
