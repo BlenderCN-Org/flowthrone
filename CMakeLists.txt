@@ -56,16 +56,21 @@ target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 add_library(flowthrone STATIC
   flowthrone/cpp/optical_flow_model.h
   flowthrone/cpp/optical_flow_model.cpp
+  flowthrone/cpp/optical_flow_tf_model.cpp
+  flowthrone/cpp/optical_flow_tf_model.h
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
   flowthrone/cpp/visualization.cpp
   flowthrone/cpp/visualization.h
   flowthrone/cpp/utils.cpp
   flowthrone/cpp/utils.h
+  flowthrone/cpp/tf_utils.cpp
+  flowthrone/cpp/tf_utils.h
 )
 
 target_link_libraries(flowthrone
   flowthrone_proto
+  ${TensorFlow_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -130,8 +135,8 @@ target_link_libraries(evaluation_tool
   ${OpenCV_LIBS}
 )
 
-add_executable(evaluation_main flowthrone/cpp/evaluation_main)
-target_link_libraries(evaluation_main
+add_executable(evaluation_tool flowthrone/cpp/evaluation_tool.cpp)
+target_link_libraries(evaluation_tool
   flowthrone
   evaluation
   ${Boost_LIBRARIES}
@@ -188,7 +193,7 @@ target_link_libraries(utils_test
 
 add_executable(tf_utils_test flowthrone/cpp/tf_utils_test.cpp)
 target_link_libraries(tf_utils_test
-  tf_utils
+  flowthrone
   test_utils
   ${GTEST_BOTH_LIBRARIES}
   ${GFLAGS_LIBRARIES}

@@ -9,19 +9,14 @@ Follow the standard installation instructions for the following libraries:
 * [Google Protocol Buffers](https://github.com/google/protobuf) 
   You should use [this version](http://mirror.bazel.build/github.com/google/protobuf/archive/0b059a3d8a8f8aa40dde7bea55edca4ec5dfea66.tar.gz) due to tensorflow compatibility issues, or at the very least it should be >= 3.4.0
 * OpenCV (2.4+)
-
-Using tensorflow is a whole separate meal; the steps are roughly:
+* [Eigen](http://eigen.tuxfamily.org/)
+  You should use [this version](https://bitbucket.org/eigen/eigen/get/429aa5254200.tar.gz) due to tensorflow compatibility issues.
+* [Tensorflow](https://www.tensorflow.org/)
+  Installing tensorflow is a whole separate meal; the steps are roughly:
   1. Clone [tensorflow](https://github.com/tensorflow/tensorflow/tree/r1.4/)
      repository and checkout `r1.4`.
   2. Run `build_and_install_tensorflow.py` which will install a tensorflow 
      shared library on your system.
-  3. Install the same version of Protobuf and Eigen that came with tensorflow.
-     It will be easier to download and install from archives in 
-     `cmake/Protobuf_VERSION.cmake` and `Eigen_VERSION.cmake`.
-     (Alternatively, grep `tensorflow/workspace.bzl` for 
-     `eigen_archive` and `protobuf_archive` and install both libraries from
-     those specific tarballs -- which will be the same as those in `.cmake`
-     files).
 
 ## antipasto
 
