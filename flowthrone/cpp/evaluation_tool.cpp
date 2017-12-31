@@ -12,7 +12,6 @@
 #include "flowthrone.pb.h"
 #include "optical_flow_model.h"
 #include "visualization.h"
-#include "optical_flow_tf_model.h"
 
 static const std::string gUsageMessage = R"(
 Tool for evaluating optical flow on a collection of images.
@@ -26,7 +25,9 @@ Example:
 
 DEFINE_string(eval_input, "", "EvaluationInput proto filename");
 DEFINE_string(eval_output, "output.pbtxt", "EvaluationOutput proto filename");
-DEFINE_string(options, "", "Optical flow configuration proto.");
+DEFINE_string(options, "",
+              "Filename containing OpticalFlowOptions options (configuration "
+              "for optical flow)");
 DEFINE_bool(write_images, false,
             "Write intermediate images with results? If set to true, images "
             "will be written to the same directory that --eval_output points "
@@ -59,19 +60,15 @@ void LoadTriplet(const EvaluationInput::Datum& datum, cv::Mat* I0, cv::Mat* I1,
 }  // namespace
 
 int main(int argc, char** argv) {
+  CHECK(!FLAGS_eval_input.empty())
+      << "You must provide a valid path to the file with evaluation options "
+         "(--eval_input argument)";
+
   EvaluationInput evaluation_config;
   ParseProtoFromFile(FLAGS_eval_input, &evaluation_config);
 
-  // This would be replaced with the proper instantiation of the class of
-  // interest. However currently no algorithms are checked-in, so this binary
-  // is simply a stub.
-  OpticalFlowTensorFlowModelOptions options;
-  options.set_sliding_window(true);
-  options.set_window_stride(0.25);
-  options.set_export_dir("/home/vasiliy/Sandbox/flowthrone/model_128x128v2");
-
-  std::unique_ptr<OpticalFlowModel> solver(
-      new OpticalFlowTensorFlowModel(options));
+  std::unique_ptr<OpticalFlowModel> solver =
+      OpticalFlowModel::Create(FLAGS_options);
 
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());

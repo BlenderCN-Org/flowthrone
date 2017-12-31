@@ -72,10 +72,9 @@ void WriteFile(const std::string& filename, const std::string& content) {
 
 using google::protobuf::Message;
 
-namespace {
-
 // Adapted from maplab
 bool ParseTextProtoFromFile(const std::string& filename, Message* message) {
+  // TODO: This CHECK is very repetitive, should be simplified.
   std::ifstream file(filename);
   CHECK(file.is_open()) << "Could not open file '" << filename << "'";
   google::protobuf::io::IstreamInputStream istream(&file);
@@ -105,8 +104,6 @@ bool WriteBinaryProtoToFile(const std::string& filename,
                         << "' for writing.";
   return message.SerializeToOstream(&file);
 }
-
-}  // namespace
 
 void ParseProtoFromFile(const std::string& filename, Message* message) {
   // Try find to parse proto as if it were text-format, then if that fails,

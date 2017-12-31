@@ -55,6 +55,7 @@ target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 # Libraries begin here.
 add_library(flowthrone STATIC
   flowthrone/cpp/optical_flow_model.h
+  flowthrone/cpp/optical_flow_model.cpp
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
   flowthrone/cpp/visualization.cpp
