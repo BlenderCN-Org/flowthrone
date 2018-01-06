@@ -29,8 +29,7 @@ Example:
 DEFINE_string(video, "", "Path to a video file.");
 DEFINE_string(img1, "", "Filename of image1");
 DEFINE_string(img2, "", "Filename of image2");
-DEFINE_string(output_image, "", "Output image filename");
-DEFINE_string(output_video, "", "Output video filename");
+DEFINE_string(output, "", "Output image or video filename");
 DEFINE_bool(visualize, false,
             "Whether the results should be visualized or not.");
 DEFINE_bool(more, false,
@@ -58,15 +57,15 @@ int main(int argc, char** argv) {
   CHECK(data_feeder->next(&images[1])) << "Could not read first image.";
 
   std::unique_ptr<cv::VideoWriter> video_writer;
-  if (!FLAGS_output_video.empty()) {
+  if (!FLAGS_output.empty() && dynamic_cast<VideoFeeder>(data_feeder)) {
     int fourcc = CV_FOURCC('M', 'P', '4', '2');
     int fps = 30;
     cv::Size sz(images[1].cols * 2, images[1].rows);
     video_writer.reset(
-        new cv::VideoWriter(FLAGS_output_video, fourcc, fps, sz));
+        new cv::VideoWriter(FLAGS_output, fourcc, fps, sz));
     CHECK(video_writer->isOpened())
         << "Could not successfully open video for writing "
-        << FLAGS_output_video;
+        << FLAGS_output;
   }
 
   while (true) {
@@ -96,13 +95,14 @@ int main(int argc, char** argv) {
       cv::imshow("image", vis);
       cv::waitKey(0);
     }
-    if (!FLAGS_output_image.empty()) {
-      cv::imwrite(FLAGS_output_image, vis);
-      LOG(INFO) << "Wrote " << FLAGS_output_image;
-    }
-    if (!FLAGS_output_video.empty()) {
-      video_writer->write(vis);
-      LOG(INFO) << "Added a frame to output video.";
+    if (!FLAGS_output.empty()) {
+      if (video_writer) {
+        video_writer->write(vis);
+        LOG(INFO) << "Added a frame to output video.";
+      } else {
+        cv::imwrite(FLAGS_output_image, vis);
+        LOG(INFO) << "Wrote " << FLAGS_output;
+      }
     }
   }
   return 0;
