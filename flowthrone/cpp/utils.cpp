@@ -26,6 +26,11 @@ cv::Mat WarpWithFlow(const cv::Mat& I, const cv::Mat& flow) {
   return I_warped;
 }
 
+cv::Mat ComputeResidual(const cv::Mat& I0, const cv::Mat& I1,
+                        const cv::Mat& flow) {
+  return I0 - WarpWithFlow(I1, flow);
+}
+
 cv::Mat ResampleFlow(const cv::Mat& flow, const cv::Size& target_size) {
   CHECK_EQ(2, flow.channels());
   cv::Mat flow_out;

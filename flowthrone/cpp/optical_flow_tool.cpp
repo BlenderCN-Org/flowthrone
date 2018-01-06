@@ -81,19 +81,17 @@ int main(int argc, char** argv) {
     model->Run(images[0], images[1], &predicted_flow);
 
     // Visualizations/output.
-    cv::Mat flow_vis = ComputeFlowColor(predicted_flow);
-    cv::Mat image_blended = 0.5 * images[0] + 0.5 * images[1];
+    cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
     if (FLAGS_visualize) {
-      cv::imshow("image", HorizontalConcat(image_blended, flow_vis));
+      cv::imshow("image", vis);
       cv::waitKey(0);
     }
     if (!FLAGS_output_image.empty()) {
-      cv::imwrite(FLAGS_output_image,
-                  HorizontalConcat(image_blended, flow_vis));
+      cv::imwrite(FLAGS_output_image, vis);
       LOG(INFO) << "Wrote " << FLAGS_output_image;
     }
     if (!FLAGS_output_video.empty()) {
-      video_writer->write(HorizontalConcat(images[1], flow_vis));
+      video_writer->write(vis);
       LOG(INFO) << "Added a frame to output video.";
     }
   }

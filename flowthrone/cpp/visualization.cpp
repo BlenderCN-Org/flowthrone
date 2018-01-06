@@ -110,4 +110,15 @@ cv::Mat VerticalConcat(const cv::Mat& x, const cv::Mat& y) {
   return out;
 }
 
+cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
+                       const cv::Mat& flow) {
+  return HorizontalConcat(0.5 * I0 + 0.5 * I1, ComputeFlowColor(flow));
+}
+
+cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
+                       const cv::Mat& flow, const cv::Mat& flow_gt) {
+  return HorizontalConcat(0.5 * I0 + 0.5 * I1, ComputeFlowColor(flow),
+                          ComputeFlowColor(flow_gt));
+}
+
 }  // namespace flowthrone

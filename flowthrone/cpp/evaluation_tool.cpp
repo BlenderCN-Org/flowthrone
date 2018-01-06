@@ -87,10 +87,7 @@ int main(int argc, char** argv) {
       // Visualization block. Image pair is blended together, while predicted
       // and groundtruth optical flow are visualized in conventional ways.
       // Images are saved in the same directory as the output proto.
-      cv::Mat image_blended = 0.5 * I0 + 0.5 * I1;
-      cv::Mat flow_vis = ComputeFlowColor(predicted_flow);
-      cv::Mat flow_gt_vis = ComputeFlowColor(flow_gt);
-      cv::Mat vis = HorizontalConcat(image_blended, flow_vis, flow_gt_vis);
+      cv::Mat vis = VisualizeTuple(I0, I1, predicted_flow, flow_gt);
       std::string image_filename =
           (base_output_dir / path(datum.identifier() + ".png")).string();
       LOG(INFO) << "Writing " << image_filename;

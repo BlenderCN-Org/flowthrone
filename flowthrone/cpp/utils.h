@@ -20,6 +20,10 @@ cv::Mat WarpWithFlow(const cv::Mat& I, const cv::Mat& flow);
 //   cv::resize(input, output, target_size) * target_size / input.size()
 cv::Mat ResampleFlow(const cv::Mat& flow, const cv::Size& target_size);
 
+// Computes the warp error I0(x) - I1(warp(x)).
+cv::Mat ComputeResidual(const cv::Mat& I0, const cv::Mat& I1,
+                        const cv::Mat& flow);
+
 // Like MATLAB's linspace -- returns a vector of values equally spaced
 // between min and max (inclusively).
 std::vector<float> Linspace(float min, float max, int num);
