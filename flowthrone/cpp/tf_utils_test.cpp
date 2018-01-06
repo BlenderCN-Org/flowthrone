@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <glog/logging.h>
 #include "tf_utils.h"
 #include "test_utils.h"
 

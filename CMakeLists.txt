@@ -48,11 +48,21 @@ link_directories(
   ${Boost_LIBRARY_DIRS}
 )
 
+# Build the proto.
 protobuf_generate_cpp(PROTO_SRC PROTO_HEADER "flowthrone/proto/flowthrone.proto")
 add_library(flowthrone_proto STATIC ${PROTO_SRC} ${PROTO_HEADER})
 target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 
-# Libraries begin here.
+###############################################################################
+##   _       _____  ____   _____             _____   _____  ______   _____   ##
+##  | |     |_   _||  _ \ |  __ \     /\    |  __ \ |_   _||  ____| / ____|  ##
+##  | |       | |  | |_) || |__) |   /  \   | |__) |  | |  | |__   | (___    ##
+##  | |       | |  |  _ < |  _  /   / /\ \  |  _  /   | |  |  __|   \___ \   ##
+##  | |____  _| |_ | |_) || | \ \  / ____ \ | | \ \  _| |_ | |____  ____) |  ##
+##  |______||_____||____/ |_|  \_\/_/    \_\|_|  \_\|_____||______||_____/   ##
+##                                                                           ##
+###############################################################################
+# This is the main library that the binaries should be link.
 add_library(flowthrone STATIC
   flowthrone/cpp/optical_flow_model.h
   flowthrone/cpp/optical_flow_model.cpp
@@ -75,6 +85,8 @@ target_link_libraries(flowthrone
   ${OpenCV_LIBS}
 )
 
+# Library for evaluation/inspection. If you are only interested in running
+# optical flow, you do not need this.
 add_library(evaluation STATIC
   flowthrone/cpp/evaluation.cpp
   flowthrone/cpp/evaluation.h
@@ -85,6 +97,7 @@ target_link_libraries(evaluation
   ${OpenCV_LIBS}
 )
 
+# Library that should be linked only by tests.
 add_library(test_utils STATIC
   flowthrone/cpp/test_utils.cpp
   flowthrone/cpp/test_utils.h
@@ -94,28 +107,16 @@ target_link_libraries(test_utils
   ${OpenCV_LIBS}
 )
 
-add_library(tf_utils STATIC
-  flowthrone/cpp/tf_utils.cpp
-  flowthrone/cpp/tf_utils.h
-)
-target_link_libraries(tf_utils
-  ${TensorFlow_LIBRARIES}
-  ${OpenCV_LIBS}
-)
-
-add_library(optical_flow_tf_model
-  flowthrone/cpp/optical_flow_tf_model.cpp
-  flowthrone/cpp/optical_flow_tf_model.h
-)
-target_link_libraries(optical_flow_tf_model
-  tf_utils
-  flowthrone
-  flowthrone_proto
-  ${TensorFlow_LIBRARIES}
-  ${OpenCV_LIBS}
-)
-
-# Binaries
+###############################################################################
+##        ____  _____  _   _            _____   _____  ______   _____        ##
+##       |  _ \|_   _|| \ | |    /\    |  __ \ |_   _||  ____| / ____|       ##
+##       | |_) | | |  |  \| |   /  \   | |__) |  | |  | |__   | (___         ##
+##       |  _ <  | |  | . ` |  / /\ \  |  _  /   | |  |  __|   \___ \        ##
+##       | |_) |_| |_ | |\  | / ____ \ | | \ \  _| |_ | |____  ____) |       ##
+##       |____/|_____||_| \_|/_/    \_\|_|  \_\|_____||______||_____/        ##
+##                                                                           ##
+###############################################################################
+# Tool for running optical flow on a pair of images, or on a video.
 add_executable(optical_flow_tool flowthrone/cpp/optical_flow_tool.cpp)
 target_link_libraries(optical_flow_tool
   flowthrone
@@ -124,17 +125,7 @@ target_link_libraries(optical_flow_tool
   ${OpenCV_LIBS}
 )
 
-add_executable(evaluation_tool flowthrone/cpp/evaluation_tool)
-target_link_libraries(evaluation_tool
-  flowthrone
-  evaluation
-  optical_flow_tf_model
-  ${Boost_LIBRARIES}
-  ${GLOG_LIBRARIES}
-  ${GFLAGS_LIBRARIES}
-  ${OpenCV_LIBS}
-)
-
+# Binary for evaluation.
 add_executable(evaluation_tool flowthrone/cpp/evaluation_tool.cpp)
 target_link_libraries(evaluation_tool
   flowthrone
@@ -145,19 +136,15 @@ target_link_libraries(evaluation_tool
   ${OpenCV_LIBS}
 )
 
-add_executable(tensorflow_model_tool 
-               flowthrone/cpp/tensorflow_model_tool.cpp)
-target_link_libraries(tensorflow_model_main
-  tf_utils
-  flowthrone
-  optical_flow_tf_model
-  ${TensorFlow_LIBRARIES}
-  ${Protobuf_LIBRARIES}
-  ${GLOG_LIBRARIES}
-  ${GFLAGS_LIBRARIES}
-)
-
-# Test definitions.
+###############################################################################
+##                _______   ______    _____   _______    ____                ##
+##               |__   __| |  ____|  / ____| |__   __|  / ____|              ##
+##                  | |    | |__    | (___      | |    | (___                ##
+##                  | |    |  __|    \___ \     | |     \___ \               ##
+##                  | |    | |____   ____) |    | |     ____) |              ##
+##                  |_|    |______| |_____/     |_|    |_____/               ##
+##                                                                           ##
+###############################################################################
 add_executable(io_test flowthrone/cpp/io_test.cpp)
 target_link_libraries(io_test
   test_utils
@@ -198,7 +185,6 @@ target_link_libraries(tf_utils_test
   ${GTEST_BOTH_LIBRARIES}
   ${GFLAGS_LIBRARIES}
 )
-
 
 # List of tests.
 enable_testing()
