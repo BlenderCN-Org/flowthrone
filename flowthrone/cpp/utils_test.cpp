@@ -39,6 +39,24 @@ TEST(WarpWithFlow, Displacement) {
   }
 }
 
+TEST(WarpWithFlow, DiscreteDisplacement) {
+  using std::pair;
+  using std::make_pair;
+  cv::Mat flow(4, 4, CV_32FC2, cv::Scalar(1, 0));
+  std::vector<pair<float, float>> input_points;
+  constexpr int kNumPoints = 100;
+  for (int i = 0; i < kNumPoints; ++i) {
+    input_points.emplace_back(drand48() * 10.0f - 5.0f,
+                              drand48() * 10.0f - 5.0f);
+  }
+  auto output_points = WarpWithFlow(input_points, flow);
+  ASSERT_EQ(output_points.size(), input_points.size());
+  for (int i = 0; i < kNumPoints; ++i) {
+    EXPECT_EQ(output_points[i].first, input_points[i].first - 1.0f);
+    EXPECT_EQ(output_points[i].second, input_points[i].second);
+  }
+}
+
 TEST(ResampleFlow, Correct) {
   cv::Mat uv;
   cv::merge(std::vector<cv::Mat>{cv::Mat(10, 10, CV_32FC1, cv::Scalar(10)),

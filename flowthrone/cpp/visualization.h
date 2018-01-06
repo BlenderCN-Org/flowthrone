@@ -25,4 +25,11 @@ cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
 cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
                        const cv::Mat& flow, const cv::Mat& flow_gt);
 
+// Given a pair of images and flow, overlays a grid of points on each image
+// that displays the correspondence.
+// A regular grid is overlaid on I1, and the grid on I0 is warped by the flow.
+std::pair<cv::Mat, cv::Mat> OverlayWarpedPoints(
+    const cv::Mat& I0, const cv::Mat& I1, const cv::Mat& flow,
+    int point_spacing = 10, int point_radius = 2, int point_thickness = 2);
+
 }  // namespace flowthrone

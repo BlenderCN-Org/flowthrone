@@ -18,6 +18,34 @@ std::vector<cv::Mat> GetFlowMaps(const cv::Mat& flow) {
   return flow_maps;
 }
 
+std::vector<std::pair<float, float>> WarpWithFlow(
+    const std::vector<std::pair<float, float>>& points, const cv::Mat& flow) {
+  std::vector<std::pair<float, float>> warped;
+  warped.reserve(points.size());
+  for (const auto& p : points) {
+    float x = p.first;
+    float y = p.second;
+    // TODO: Currently just does the 'nearest neighbor' flow warping, which is
+    // stupid and terrible, but easy.
+    int x_rounded = std::max(std::min<int>(round(x), flow.cols - 1), 0);
+    int y_rounded = std::max(std::min<int>(round(y), flow.rows - 1), 0);
+    const cv::Vec2f& warp = flow.at<cv::Vec2f>(y_rounded, x_rounded);
+    warped.emplace_back(x - warp[0], y - warp[1]);
+  }
+  return warped;
+}
+
+cv::Mat FlowMagnitude(const cv::Mat& flow) {
+  CHECK_EQ(CV_32FC2, flow.type()) << "Incorrect cv::Mat format for flow";
+  std::vector<cv::Mat> flow_maps;
+  cv::split(flow, flow_maps);
+  cv::Mat magnitude, dxdx, dydy;
+  cv::multiply(flow_maps[0], flow_maps[0], dxdx);
+  cv::multiply(flow_maps[1], flow_maps[1], dydy);
+  cv::sqrt(dxdx + dydy, magnitude);
+  return magnitude;
+}
+
 cv::Mat WarpWithFlow(const cv::Mat& I, const cv::Mat& flow) {
   CHECK_EQ(CV_32FC2, flow.type()) << "Incorrect cv::Mat format for flow";
   std::vector<cv::Mat> flow_maps = GetFlowMaps(flow);

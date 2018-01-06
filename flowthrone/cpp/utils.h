@@ -15,6 +15,16 @@ std::vector<cv::Mat> GetFlowMaps(const cv::Mat& flow);
 // (with the same flow).
 cv::Mat WarpWithFlow(const cv::Mat& I, const cv::Mat& flow);
 
+// Warps a collection of discrete points with optical flow. This function
+// performs the analogue of the above, but for discrete points. Hence, each
+// output point i is given by:
+//   (x_out, y_out) = (x_in - flow(x_in, y_in, 0), y_in - flow(x_in, y_in, 1))
+// NOTE: points *outside* of the flow image boundaries are assigned the nearest
+// flow value (this amounts to extending the flow field boundary values
+// indefinitely in each direction).
+std::vector<std::pair<float, float>> WarpWithFlow(
+    const std::vector<std::pair<float, float>>& points, const cv::Mat& flow);
+
 // Resizes the flow field and appropriately scales the flow values.
 // Effectively does:
 //   cv::resize(input, output, target_size) * target_size / input.size()
@@ -23,6 +33,9 @@ cv::Mat ResampleFlow(const cv::Mat& flow, const cv::Size& target_size);
 // Computes the warp error I0(x) - I1(warp(x)).
 cv::Mat ComputeResidual(const cv::Mat& I0, const cv::Mat& I1,
                         const cv::Mat& flow);
+
+// Returns magnitude of optical flow (i.e. each element is ||w(x)||).
+cv::Mat FlowMagnitude(const cv::Mat& flow);
 
 // Like MATLAB's linspace -- returns a vector of values equally spaced
 // between min and max (inclusively).

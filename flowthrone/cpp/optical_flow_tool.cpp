@@ -33,6 +33,12 @@ DEFINE_string(output_image, "", "Output image filename");
 DEFINE_string(output_video, "", "Output video filename");
 DEFINE_bool(visualize, false,
             "Whether the results should be visualized or not.");
+DEFINE_bool(more, false,
+            "Whether to visualize even more artifacts. This is inactive "
+            "unless '--visualize' is on");
+DEFINE_string(options, "",
+              "Filename containing OpticalFlowOptions options (configuration "
+              "for optical flow)");
 
 namespace flowthrone {
 
@@ -44,12 +50,9 @@ class Feeder {
 };
 
 int main(int argc, char** argv) {
-  std::unique_ptr<OpticalFlowModel> model;
-  // At this stage, you would actually create the algorithm implementing flow.
-  // Currently, algorithms implementing optical flow are not checked in, so
-  // this binary is a stub, and while it will compile, it will segfault as
-  // soon as this (uninitialized) class is accessed.
-  // This will be fixed in some future.
+  std::unique_ptr<OpticalFlowModel> model =
+      OpticalFlowModel::Create(FLAGS_options);
+
   std::unique_ptr<Feeder> data_feeder = Feeder::Create();
   std::vector<cv::Mat> images(2);
   CHECK(data_feeder->next(&images[1])) << "Could not read first image.";
@@ -83,6 +86,13 @@ int main(int argc, char** argv) {
     // Visualizations/output.
     cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
     if (FLAGS_visualize) {
+      if (FLAGS_more) {
+        // Show warped points in the two images.
+        cv::Mat I0_vis, I1_vis;
+        std::tie(I0_vis, I1_vis) =
+            OverlayWarpedPoints(images[0], images[1], predicted_flow);
+        cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
+      }
       cv::imshow("image", vis);
       cv::waitKey(0);
     }

@@ -1,4 +1,5 @@
 #include "visualization.h"
+#include "utils.h"
 #include "glog/logging.h"
 
 namespace flowthrone {
@@ -33,6 +34,22 @@ std::vector<cv::Vec3b> MakeColorWheel() {
     colors.push_back(cv::Vec3b(255 - floor(255.0 * i / mr), 0, 255));
   }
   return colors;
+}
+
+cv::Vec3b BlendedColor(const std::vector<cv::Vec3b>& colorwheel, float x) {
+  CHECK(0 <= x && x <= 1.0f);
+  size_t n = colorwheel.size();
+  x *= n;
+  int hi = std::min<int>(n - 1, int(ceil(x)));
+  int lo = std::min<int>(n - 1, int(x));
+  float w = 1.0 - (x - lo);
+  const auto& c0 = colorwheel[lo];
+  const auto& c1 = colorwheel[hi];
+  cv::Vec3b out;
+  for (int i = 0; i < 3; ++i) {
+    out[i] = std::min(255.0f, std::max(0.0f, w * c0[i] + (1 - w) * c1[i]));
+  }
+  return out;
 }
 
 }  // namespace internal
@@ -119,6 +136,37 @@ cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
                        const cv::Mat& flow, const cv::Mat& flow_gt) {
   return HorizontalConcat(0.5 * I0 + 0.5 * I1, ComputeFlowColor(flow),
                           ComputeFlowColor(flow_gt));
+}
+
+std::pair<cv::Mat, cv::Mat> OverlayWarpedPoints(const cv::Mat& I0,
+                                                const cv::Mat& I1,
+                                                const cv::Mat& flow,
+                                                int point_spacing, int radius,
+                                                int thickness) {
+  std::vector<cv::Vec3b> colormap = internal::MakeColorWheel();
+  int cols = I0.cols;
+  int rows = I1.rows;
+  int nx = cols / point_spacing;
+  int ny = rows / point_spacing;
+  CHECK(nx > 0 && ny > 0);
+  auto points_img1 = Meshgrid(
+      Linspace(0.0f + point_spacing / 2.0, cols - point_spacing / 2.0, nx),
+      Linspace(0.0f + point_spacing / 2.0, cols - point_spacing / 2.0, ny));
+  auto points_img0 = WarpWithFlow(points_img1, flow);
+  cv::Mat img0_vis = I0.clone();
+  cv::Mat img1_vis = I1.clone();
+  CHECK_EQ(points_img1.size(), points_img0.size());
+  for (size_t i = 0; i < points_img1.size(); ++i) {
+    float x0, y0, x1, y1;
+    std::tie(x1, y1) = points_img1[i];
+    std::tie(x0, y0) = points_img0[i];
+    float frac = i / static_cast<float>(points_img1.size());
+    const cv::Vec3b& color_vec3b = internal::BlendedColor(colormap, frac);
+    const cv::Scalar color(color_vec3b[0], color_vec3b[1], color_vec3b[2]);
+    cv::circle(img1_vis, cv::Point(x1, y1), 1, color, 2);
+    cv::circle(img0_vis, cv::Point(x0, y0), 1, color, 2);
+  }
+  return std::make_pair(img0_vis, img1_vis);
 }
 
 }  // namespace flowthrone
