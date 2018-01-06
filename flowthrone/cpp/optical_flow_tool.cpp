@@ -57,15 +57,13 @@ int main(int argc, char** argv) {
   CHECK(data_feeder->next(&images[1])) << "Could not read first image.";
 
   std::unique_ptr<cv::VideoWriter> video_writer;
-  if (!FLAGS_output.empty() && dynamic_cast<VideoFeeder>(data_feeder)) {
+  if (!FLAGS_output.empty() && !FLAGS_video.empty()) {
     int fourcc = CV_FOURCC('M', 'P', '4', '2');
     int fps = 30;
     cv::Size sz(images[1].cols * 2, images[1].rows);
-    video_writer.reset(
-        new cv::VideoWriter(FLAGS_output, fourcc, fps, sz));
+    video_writer.reset(new cv::VideoWriter(FLAGS_output, fourcc, fps, sz));
     CHECK(video_writer->isOpened())
-        << "Could not successfully open video for writing "
-        << FLAGS_output;
+        << "Could not successfully open video for writing " << FLAGS_output;
   }
 
   while (true) {
@@ -100,7 +98,7 @@ int main(int argc, char** argv) {
         video_writer->write(vis);
         LOG(INFO) << "Added a frame to output video.";
       } else {
-        cv::imwrite(FLAGS_output_image, vis);
+        cv::imwrite(FLAGS_output, vis);
         LOG(INFO) << "Wrote " << FLAGS_output;
       }
     }
@@ -122,7 +120,6 @@ class VideoFeeder : public Feeder {
     *output = img;
     return success;
   }
-
  private:
   cv::VideoCapture video_;
 };
@@ -145,7 +142,6 @@ class ImageFeeder : public Feeder {
     index_++;
     return true;
   }
-
  private:
   std::vector<cv::Mat> images_;
   int index_ = 0;
