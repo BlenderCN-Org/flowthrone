@@ -24,8 +24,11 @@ package:
 ## primo
 To try running/visualizing optical flow:
     
-    $ ./optical_flow_main --helpshort
+    $ ./optical_flow_tool --helpshort
 
+To evaluate/benchmark optical flow:
+  
+    $ ./evaluation_tool --helpshort
 
 ## dolce (python installation)
 

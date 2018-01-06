@@ -34,7 +34,7 @@ include_directories(
   ${GFLAGS_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIR}
   ${Protobuf_INCLUDE_DIRS}
-  ${BOost_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -83,9 +83,19 @@ target_link_libraries(test_utils
 )
 
 # Binaries
-add_executable(optical_flow_main flowthrone/cpp/optical_flow_main.cpp)
-target_link_libraries(optical_flow_main
+add_executable(optical_flow_tool flowthrone/cpp/optical_flow_tool.cpp)
+target_link_libraries(optical_flow_tool
   flowthrone
+  ${GLOG_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+  ${OpenCV_LIBS}
+)
+
+add_executable(evaluation_tool flowthrone/cpp/evaluation_tool)
+target_link_libraries(evaluation_tool
+  flowthrone
+  evaluation
+  ${Boost_LIBRARIES}
   ${GLOG_LIBRARIES}
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}

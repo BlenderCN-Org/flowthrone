@@ -23,7 +23,7 @@ When '--visualize' flag is added, each frame's output will be shown to the
 user; otherwise, you may provide '--output_image' or '--output_video' flags to
 write images or video, respectively.
 Example:
-  ./optical_flow_main --video /tmp/input.mp4 --output_video /tmp/flow.avi
+  ./optical_flow_tool --video /tmp/input.mp4 --output_video /tmp/flow.avi
 )";
 
 DEFINE_string(video, "", "Path to a video file.");
