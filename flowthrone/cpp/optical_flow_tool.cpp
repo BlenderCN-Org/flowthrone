@@ -13,6 +13,7 @@
 #include "glog/logging.h"
 #include "visualization.h"
 #include "io.h"
+#include "signal_handling.h"
 #include "optical_flow_model.h"
 
 static const std::string gUsageMessage = R"(
@@ -38,6 +39,9 @@ DEFINE_bool(more, false,
 DEFINE_string(options, "",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
+DEFINE_double(scale, 0.5,
+              "Factor by which input images/video should be "
+              "rescaled, prior to the optical flow call.");
 
 namespace flowthrone {
 
@@ -66,6 +70,9 @@ int main(int argc, char** argv) {
         << "Could not successfully open video for writing " << FLAGS_output;
   }
 
+  // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
+  // we do not complete all frames).
+  flowthrone::InstallSigIntHandler();
   while (true) {
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
@@ -102,6 +109,10 @@ int main(int argc, char** argv) {
         LOG(INFO) << "Wrote " << FLAGS_output;
       }
     }
+    if (HasSigIntOccurredSinceLastCall()) {
+      LOG(INFO) << "Captured SIGINT; Cleaning up.";
+      break;
+    }
   }
   return 0;
 }
@@ -116,7 +127,11 @@ class VideoFeeder : public Feeder {
     cv::Mat img;
     video_.grab();
     bool success = video_.retrieve(img);
-    cv::resize(img, img, cv::Size(), 0.5, 0.5);
+    // OpenCV fails when trying to resize an empty image.
+    if (!success) {
+      return false;
+    }
+    cv::resize(img, img, cv::Size(), FLAGS_scale, FLAGS_scale);
     *output = img;
     return success;
   }
@@ -138,7 +153,7 @@ class ImageFeeder : public Feeder {
     if (index_ >= 2) {
       return false;
     }
-    *output = images_[index_].clone();
+    cv::resize(images_[index_], *output, cv::Size(), FLAGS_scale, FLAGS_scale);
     index_++;
     return true;
   }
@@ -175,5 +190,6 @@ int main(int argc, char** argv) {
   ::google::InitGoogleLogging(argv[0]);
   ::google::InstallFailureSignalHandler();
   FLAGS_alsologtostderr = 1;
+
   return flowthrone::main(argc, argv);
 }
