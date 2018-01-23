@@ -110,6 +110,39 @@ target_link_libraries(test_utils
 )
 
 ###############################################################################
+##              _____ ____  _   _ ______ _____ _____  _____                  ## 
+##             / ____/ __ \| \ | |  ____|_   _/ ____|/ ____|                 ##
+##            | |   | |  | |  \| | |__    | || |  __| (___                   ##
+##            | |   | |  | | . ` |  __|   | || | |_ |\___ \                  ##
+##            | |___| |__| | |\  | |     _| || |__| |____) |                 ##
+##             \_____\____/|_| \_|_|    |_____\_____|_____/                  ##
+##                                                                           ##
+###############################################################################
+# Copy the file with options.
+SET(CONFIG_PBTXT ${CMAKE_CURRENT_BINARY_DIR}/config/flowthrone.pbtxt)
+configure_file(flowthrone/config/flowthrone.pbtxt ${CONFIG_PBTXT} COPYONLY)
+
+set(CURRENT_TF_MODEL "model_v3_128x128")
+set(LOCAL_CURRENT_TF_MODEL ${CMAKE_CURRENT_BINARY_DIR}/${CURRENT_TF_MODEL})
+# After copying the default pbtxt, edit it in place with the full-path to the
+# downloaded trained network.
+message(STATUS "Trying to sed the config to point to ${LOCAL_CURRENT_TF_MODEL}")
+execute_process(COMMAND sed -i "s|export_dir: \".*\"|export_dir: \"${LOCAL_CURRENT_TF_MODEL}\"|" ${CONFIG_PBTXT})
+
+# Copy the trained network. Yes, wget from Dropbox, since S3 costs much m0neys!
+# This is only done once -- when "cmake .." runs for the first time, since
+# these models are nontrivially large.
+if(NOT TF_MODEL_DOWNLOADED)
+  message(STATUS "Trying to download a tensorflow model: ${CURRENT_TF_MODEL}")
+  execute_process(COMMAND wget https://www.dropbox.com/s/ivhyrzsi9bfv8bh/${CURRENT_TF_MODEL}.tar.gz)
+  message(STATUS "Trying to untar the tensorflow model...")
+  execute_process(COMMAND tar -xvf ${CURRENT_TF_MODEL}.tar.gz)
+  execute_process(COMMAND rm ${CURRENT_TF_MODEL}.tar.gz)
+
+  set(TF_MODEL_DOWNLOADED TRUE CACHE BOOL "Tensorflow model was downloaded." FORCE)
+endif()
+
+###############################################################################
 ##        ____  _____  _   _            _____   _____  ______   _____        ##
 ##       |  _ \|_   _|| \ | |    /\    |  __ \ |_   _||  ____| / ____|       ##
 ##       | |_) | | |  |  \| |   /  \   | |__) |  | |  | |__   | (___         ##

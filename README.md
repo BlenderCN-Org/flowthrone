@@ -28,6 +28,8 @@ package:
     $ make all                                                                  
     $ make test 
 
+This step will compile everything that should be compiled, will download the
+tensorflow model, and will modify `flowtrhone.pbtxt` options to point to it. 
 
 ## primo
 To try running/visualizing optical flow:

@@ -36,7 +36,7 @@ DEFINE_bool(visualize, false,
 DEFINE_bool(more, false,
             "Whether to visualize even more artifacts. This is inactive "
             "unless '--visualize' is on");
-DEFINE_string(options, "",
+DEFINE_string(options, "config/flowthrone.pbtxt",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
 DEFINE_double(scale, 0.5,

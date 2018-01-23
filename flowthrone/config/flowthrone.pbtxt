@@ -1,0 +1,3 @@
+export_dir: "point-this-to-your-favorite-tensorflow-model"
+sliding_window: true
+window_stride: 0.25  
