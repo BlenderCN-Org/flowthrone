@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-demo').addClass('link-active');
+});
+</script>
+
+<script type="text/javascript" src="static/dropzone.js"></script>
+<link rel="stylesheet" href="static/dropzone.css">
+
+<div class="container">
+
+  <form action="/submit_task" method="post" enctype="multipart/form-data">
+    <div class="form-group">
+      Choose a short video clip to run optical flow on:
+      <div class="form-row">
+        <div class="custom-file">
+          <input type="file" class="custom-file-input" name="video" id="videoselector" onchange="$('#video-label').html(this.files[0].name)">
+          <label class="custom-file-label transparent" id="video-label" for="videoselector">Video file</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <b>Or</b> choose a pair of images to run optical flow on:
+      <div class="form-row">
+        <div class="col">
+          <input type="file" class="custom-file-input" name="image1" id="image-selector1" onchange="$('#image1-label').html(this.files[0].name)">
+          <label class="custom-file-label transparent" id="image1-label" for="image-selector1">First image</label>
+        </div>
+        <div class="col">
+          <input type="file" class="custom-file-input" name="image2" id="image-selector2" onchange="$('#image2-label').html(this.files[0].name)">
+          <label class="custom-file-label transparent" id="image2-label" for="image-selector2">Second image</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      Optionally, edit the set of options that optical flow will run with:
+      <div class="form-row">
+        <textarea class="form-control transparent" name="flowthroneoptions" cols="60" rows="10">{{ default_options_pbtxt }}</textarea>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
+
+</div><!-- /.container -->
+
+
+{% endblock %}
+
+
+

@@ -1,0 +1,157 @@
+body {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+  background-image: url("asfalt.jpg");
+  color: #777777;
+  font-family: "Quicksand", serif;
+}
+a {
+  color: #bbbbbb
+}
+a:hover {
+  color: #dddddd
+}
+.header,
+.footer {
+  padding-right: 1rem;
+  padding-left: 1rem;
+}
+
+.header {
+  padding-bottom: 1rem;
+  border-bottom: .05rem solid #e5e5e5;
+}
+
+/* Make the masthead heading the same height as the navigation */
+.header h3 {
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 3rem;
+}
+
+/* Custom page footer */
+.footer {
+  padding-top: 1.5rem;
+  color: #777;
+  border-top: .05rem solid #e5e5e5;
+}
+
+/* Customize container */
+@media (min-width: 48em) {
+  .container {
+    max-width: 46rem;
+  }
+}
+.container-narrow > hr {
+  margin: 2rem 0;
+}
+
+/* Main marketing message and sign up button */
+.jumbotron {
+  text-align: center;
+  border-bottom: .05rem solid #e5e5e5;
+}
+.jumbotron .btn {
+  padding: .75rem 1.5rem;
+  font-size: 1.5rem;
+}
+
+/* Responsive: Portrait tablets and up */
+@media screen and (min-width: 48em) {
+  /* Remove the padding we set earlier */
+  .header,
+  .marketing,
+  .footer {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  /* Space out the masthead */
+  .header {
+    margin-bottom: 2rem;
+  }
+
+  /* Remove the bottom border on the jumbotron for visual effect */
+  .jumbotron {
+    border-bottom: 0;
+  }
+}
+
+.transparent {
+  background-color: rgba(0,0,0,0);
+}
+.list-group-item {
+  padding: 3px 10px;
+}
+.list-group-item:hover {
+  background-color: rgba(50,50,50, 0.5);
+}
+.link-active {
+  background-color: #3c3c3c;
+}
+
+.list-group-item-action:focus {
+  background-color: rgba(50,50,50,0.75) !important;
+  outline: 1px dotted !important;
+}
+.list-group-item-action:active {
+  background-color: rgba(50,50,50,0.75) !important;
+  outline: 1px dotted !important;
+}
+
+.btn-primary, btn-primary:visited {
+  border-color: #3c3c3c !important;
+  background-color: #3c3c3c !important;
+}
+.btn-primary:hover {
+  border-color: #3c3c3c !important;
+  background-color: #777777 !important;
+}
+.btn-primary:active {
+  border-color: #3c3c3c !important;
+  background-color: #4c4c4c !important;
+}
+
+.half-alpha {
+  opacity: 0.5;
+}
+.quarter-alpha {
+  opacity: 0.25;
+}
+.tenth-alpha {
+  opacity: 0.10;
+}
+
+#result-visualization {
+  margin-bottom: 1em;
+  border: 1px solid black;
+}
+
+#result-image {
+  display: block;
+  margin: auto;
+  border: 2px solid white;
+  max-width: 40em;
+}
+
+#result-video {
+  display: block;
+  margin: auto;
+  max-width: 40em;
+}
+
+.result-heading {
+  margin-top: 0.5em;
+}
+
+.result-text {
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(100,100,100, 0.75);
+  white-space: pre-wrap;
+}
+
+.result-log {
+  font-size: 8px;
+  white-space: pre-wrap;
+}

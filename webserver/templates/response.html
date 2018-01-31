@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-demo').addClass('link-active');
+});
+</script>
+
+<div class="container">
+  {% if error %}
+  <div class="alert alert-danger transparent"> {{ content }} </div>
+  {% else %}
+  <div class="alert alert-success transparent">
+    {{ content }}
+    <br>
+    When the task completes, results will be available <a href="/examples">here</a>.
+  </div>
+  {% endif %}
+
+</div><!-- /.container -->
+
+
+{% endblock %}

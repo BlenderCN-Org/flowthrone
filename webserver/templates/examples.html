@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-examples').addClass('link-active');
+});
+
+// If the argument is an empty string, hides the image, otherwise shows it.
+function maybe_load_result_image(result_filename) {
+  if (result_filename != "") {
+    var url = {{ url_for('uploaded_file', filename='') }} + result_filename;
+    $('#result-image').attr('src', url);
+    $('#result-image-href').attr("href", url);
+    $('#result-image').show()
+  } else {
+    $('#result-image').hide();
+  }
+}
+
+function maybe_load_result_video(result_filename) {
+  if (result_filename != "") {
+    var url = {{ url_for('uploaded_file', filename='') }} + result_filename;
+    $('#result-video').attr('src', url);
+    $('#result-video-href').attr("href", url);
+    $('#result-video').show()
+  } else {
+    $('#result-video').hide();
+  }
+} 
+
+function maybe_show_error(result_image_filename, result_video_filename) {
+  if (result_image_filename == '' && result_video_filename == '') {
+    $('#result-error').show();
+  } else {
+    $('#result-error').hide();
+  }
+}
+
+// Does what it says. 
+function load_result(result_id) {
+  $('#result-visualization').show();
+  callback = function(payload) {
+    result = JSON.parse(payload);
+    console.log(result);
+    // Paste stderr output.
+    $('#result-stderr').text(result['stderr']);
+
+    // If ran on the image, then load the image.
+    maybe_load_result_image(result['result_image_filename']);
+    // If ran on a video, then load the video.
+    maybe_load_result_video(result['result_video_filename']);
+    // Show a helpful error message.
+    maybe_show_error(result['result_image_filename'], 
+                     result['result_video_filename']);
+    $('#result-id').text(result['id']);
+  };
+  $.ajax({
+    type: 'GET',
+    url: "/load_example/" + result_id,
+    success: callback,
+  });
+}
+
+</script>
+
+<div class="container">
+  <div class="container" id="result-visualization" style="display:none">
+    <span class="result-heading" >Result id:</span>
+    <span class="result-text" id="result-id"></span>
+    <div class="result-heading" >Output image:</div>
+    <a href="#" id="result-image-href">
+      <img id="result-image" src="#" style="display:none"></img>
+    </a>
+    <a href="#" id="result-video-href">
+      <video id="result-video" src="#" poster controls loop style="display:none"></video>
+    </a>
+
+    <div class="result-text" id="result-error">
+      No image or video -- maybe the run did not yet finish, or maybe it failed?
+      Inspect the output to find out! </div>
+    <div class="result-heading">Program output:</div>
+    <div class="result-text result-log" id="result-stderr"></div>
+  </div>
+
+<div class="list-group">
+{% for result in results %}
+<button id="{{result}}-button" type="button" class="list-group-item list-group-item-action transparent" onclick="load_result('{{result}}');"> {{ result }} </li>
+{% endfor %}
+</div>
+
+</div><!-- /.container -->
+
+<script>
+// Remove stupid HTML video controls that obscure most of the video.
+$("#result-video").hover(function() {
+  console.log("hover");
+  $(this).prop("controls", true);
+}, function() {
+  console.log("hoveroff");
+  $(this).prop("controls", false);
+});
+
+</script>
+{% endblock %}
