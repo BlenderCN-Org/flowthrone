@@ -1,6 +1,7 @@
 from flask import Flask
 from flask import flash, render_template, request, url_for, send_from_directory
 from werkzeug.utils import secure_filename
+from flaskext.markdown import Markdown
 import utils
 import os
 import config
@@ -10,6 +11,7 @@ app = Flask(__name__)
 app.secret_key = 'secret'
 app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
+Markdown(app)
 
 """ Front page """
 @app.route('/')
