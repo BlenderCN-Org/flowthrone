@@ -2,6 +2,7 @@ from __future__ import division
 import cv2
 import os
 import utils
+import random
 import numpy as np
 
 
@@ -39,7 +40,7 @@ class DataFeeder:
     _flos = []
     _weights = []
 
-    def __init__(self, files, image_size=64, batch_size=1):
+    def __init__(self, files, image_size=64, batch_size=1, max_examples_to_use=None):
         """Args:
             files: List of 3-tuples, each containing paths to flow groundtruth
                    and a corresponding image pair.
@@ -47,6 +48,13 @@ class DataFeeder:
             batch_size: Number of tuples to return on each call of `next_batch`.
         """
         self._files = files
+        if max_examples_to_use is not None:                                     
+            print ("Asked to use {} out of {} examples. Will shuffle and "      
+                   "clip the dataset.".format(\
+                    max_examples_to_use, len(self._files)))              
+            random.shuffle(self._files)                                         
+            self._files = self._files[0:max_examples_to_use] 
+        
         self._batch_size = batch_size
         self._image_size = image_size
         self._load_all()
@@ -114,7 +122,7 @@ class DataFeeder:
                 flo = cv2.resize(flo, target_size)
 
             # Set weights to be 1 - occlusion mask.
-            weights = np.ones(flo.shape)
+            weights = np.ones([I1.shape[0], I1.shape[1], 2]) 
             weights[np.isnan(flo)] = 0.0
             # Zero out invalid pixels.
             flo[np.isnan(flo)] = 0.0
@@ -158,9 +166,11 @@ class Dataset:
     """
     _train_file_list = []
     _val_file_list = []
-    _FLOW_MATCHER = 'flow1.flo'
-    _IMG1_FN = 'img1.jpg'
-    _IMG2_FN = 'img2.jpg'
+    _all_file_list = []
+
+    _FLOW_MATCHER = None
+    _IMG1_FN = None
+    _IMG2_FN = None
 
     def train_files(self):
         return self._train_file_list
@@ -168,7 +178,14 @@ class Dataset:
     def val_files(self):
         return self._val_file_list
 
-    def __init__(self, dataset_path, num_splits=10):
+    def all_files(self):
+        return self._all_file_list
+
+    def __init__(self, dataset_path, num_splits=10, \
+                       matchers=['flow1.flo', 'img1.jpg', 'img2.jpg']):
+        self._FLOW_MATCHER = matchers[0]
+        self._IMG1_FN = matchers[1]
+        self._IMG2_FN = matchers[2]
         flo_files = sorted([f for f in os.listdir(dataset_path) \
                             if f.endswith(self._FLOW_MATCHER)])
         for i, f in enumerate(flo_files):
@@ -177,8 +194,91 @@ class Dataset:
                                  f.replace(self._FLOW_MATCHER, self._IMG1_FN))
             i2_fn = os.path.join(dataset_path,
                                  f.replace(self._FLOW_MATCHER, self._IMG2_FN))
-
+            Dataset._check_files_exist(flo_fn, i1_fn, i2_fn)
             if i % num_splits == 0:
                 self._val_file_list.append([flo_fn, i1_fn, i2_fn])
             else:
                 self._train_file_list.append([flo_fn, i1_fn, i2_fn])
+            self._all_file_list.append([flo_fn, i1_fn, i2_fn])
+
+    @staticmethod
+    def _check_files_exist(flo_fn, i1_fn, i2_fn):
+        if not (os.path.exists(flo_fn) and \
+                os.path.exists(i1_fn) and \
+                os.path.exists(i2_fn)):
+            raise Exception(('Could not find {}, {}, {} tuple. Maybe the '
+                             'dataset is not organized in the expected way? '
+                             'The assumption is that each example is saved as '
+                             'three files with identical prefix.').format(
+                                 flo_fn, i1_fn, i2_fn))
+
+
+""" Reads and returns a triplet. """
+def read_triplet(flo_fn, img1_fn, img2_fn):
+    flow = utils.read_flo(flo_fn)
+    img1 = cv2.imread(img1_fn)
+    img2 = cv2.imread(img2_fn)
+    return [flow, img1, img2]
+
+
+""" Writes a (flow, image1, image2) tuple to the provided output path. """
+def write_triplet(triplet, output_path, idx):
+    flo_fn = os.path.join(output_path, '{:06d}_flow1.flo'.format(idx))
+    img1_fn = os.path.join(output_path, '{:06d}_img1.jpg'.format(idx))
+    img2_fn = os.path.join(output_path, '{:06d}_img2.jpg'.format(idx))
+    utils.write_flo(flo_fn, triplet[0])
+    cv2.imwrite(img1_fn, triplet[1])
+    cv2.imwrite(img2_fn, triplet[2])
+
+
+""" Isotropically resizes and returns the provided (flow, image1, image2) 
+    tuple. """
+def resize_triplet(triplet, scale):
+    sz = (int(triplet[0].shape[0]*scale), int(triplet[0].shape[1]*scale))
+    return [utils.resample_flow(triplet[0], sz),
+            cv2.resize(triplet[1], sz),
+            cv2.resize(triplet[2], sz)]
+
+
+""" Given a (flow, image1, image2) tuple, creates and returns a random
+    modified tuple. The allowed modifications are limited to scaling and
+    cropping. """
+def generate_example(triplet, target_size, scale_range=[0.25, 0.75]):
+    # Randomly rescale the original example. 
+    triplet = generate_example_triplet_scale(triplet, target_size, scale_range)
+    # Randomly choose location where the crop should be taken
+    triplet = generate_example_triplet_shift_and_crop(triplet, target_size)
+    # Ideally here we could also perform 90-degree rotations/flips
+    return triplet
+
+
+""" Resizes a triplet to a randomly chosen scale. """
+def generate_example_triplet_scale(triplet, target_size, scale_range=[0.25, 0.75]):
+    min_scale = target_size[0]/float(triplet[0].shape[0])
+    # Reset the lower bound if necessary. Otherwise, we run the risk of
+    # choosing a too-small scale, and not being able to pick a
+    # (target_size, target_size) sized crop later.
+    if min_scale > scale_range[0]:
+        scale_range[0] = min_scale
+    scale = np.random.uniform(low=scale_range[0], high=scale_range[1])
+    return resize_triplet(triplet, scale)
+    
+
+""" Given a (large) tiple and a (smaller) target size, take a randomly
+    selected crop and return it as a triplet """
+def generate_example_triplet_shift_and_crop(triplet, target_size):
+    rows = triplet[0].shape[0]
+    cols = triplet[0].shape[1]
+    assert target_size[0] <= rows and target_size[1] <= cols
+
+    # Choose a random offset and crop.
+    y_offset = np.random.randint(0, rows - target_size[0])
+    x_offset = np.random.randint(0, cols - target_size[1])
+    
+    flow = triplet[0][y_offset:y_offset+target_size[0],
+                      x_offset:x_offset+target_size[1],:]
+    img1 = triplet[1][y_offset:y_offset+target_size[0],
+                      x_offset:x_offset+target_size[1],:]
+    img2 = triplet[2][y_offset:y_offset+target_size[0],
+                      x_offset:x_offset+target_size[1],:]
+    return [flow, img1, img2]

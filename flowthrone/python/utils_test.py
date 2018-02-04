@@ -96,6 +96,22 @@ class TestComputeResidual(unittest.TestCase):
       err_fixed_occ[3:6, 6] = 0
       self.assertEqual(np.linalg.norm(err_fixed_occ), 0.0)
 
+class TestResampleFlow(unittest.TestCase):
+    def test_simple(self):
+      """ Create a simple scenario where a rectangle is moving to the right.
+          Given perfect flow, residual should be nonzero only in the occluded
+          region. """
+      uv = np.ones([10, 20, 2])
+      uv[:,:,0] = -5
+      uv[:,:,1] = +10
+
+      uv_out = utils.resample_flow(uv, [10, 10])
+      uv_expected = np.concatenate(
+              [np.ones([10, 10, 1])*(-2.5), np.ones([10, 10, 1])*(+10)], axis=2)
+      # Verify that in the occluded region residual is large.
+      self.assertGreater(np.linalg.norm(uv_expected-uv_out), 0.0)
+
+
 if __name__ == '__main__':
   unittest.main(verbosity=2)
 

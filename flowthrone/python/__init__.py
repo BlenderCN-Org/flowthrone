@@ -2,10 +2,10 @@
 from os.path import dirname, isfile, basename
 import glob
 
-modules = glob.glob(dirname(__file__) + "/*.py")
-__all__ = [
-    basename(f)[:-3] for f in modules
-    if isfile(f) and not f.endswith('__init__.py')
-]
+EXCLUDED_FILES = ['train_tool.py', '__init__.py']
+def is_module(f):
+    return isfile(f) and not any([f.endswith(exc) for exc in EXCLUDED_FILES])
 
-del dirname, isfile, basename, glob
+modules = glob.glob(dirname(__file__) + "/*.py")
+__all__ = [basename(f)[:-3] for f in modules if is_module(f)]
+del dirname, isfile, basename, glob, is_module, EXCLUDED_FILES
