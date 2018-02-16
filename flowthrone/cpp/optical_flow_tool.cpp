@@ -84,11 +84,11 @@ int main(int argc, char** argv) {
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
   // we do not complete all frames).
   flowthrone::InstallSigIntHandler();
-  
+
   constexpr int kPixelGap = 10;
   constexpr int kTrajectoryLength = 2;
-  TrajectorySet trajectory_set = 
-      TrajectorySet::InitializeRegularGrid(image_sz, kPixelGap, kTrajectoryLength);
+  TrajectorySet trajectory_set = TrajectorySet::InitializeRegularGrid(
+      image_sz, kPixelGap, kTrajectoryLength);
   while (true) {
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
@@ -112,10 +112,10 @@ int main(int argc, char** argv) {
         TrajectorySet::Draw(I1_vis, trajectory_set);
         cv::imshow("warped_points", I1_vis);
         //// Show warped points in the two images.
-        //cv::Mat I0_vis, I1_vis;
-        //std::tie(I0_vis, I1_vis) =
+        // cv::Mat I0_vis, I1_vis;
+        // std::tie(I0_vis, I1_vis) =
         //    OverlayWarpedPoints(images[0], images[1], predicted_flow);
-        //cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
+        // cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
       }
       cv::imshow("image", vis);
       cv::waitKey(0);

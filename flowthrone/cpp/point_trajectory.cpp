@@ -6,7 +6,8 @@
 
 namespace flowthrone {
 
-PointTrajectory::PointTrajectory(const cv::Point2f& pt, size_t n) : PointTrajectory(n) {
+PointTrajectory::PointTrajectory(const cv::Point2f& pt, size_t n)
+    : PointTrajectory(n) {
   pts_.push_back(pt);
 }
 
@@ -21,17 +22,15 @@ void PointTrajectory::Add(const cv::Point2f& pt) {
   }
 }
 
-const std::vector<cv::Point2f>& PointTrajectory::Get() const {
-  return pts_;
-}
+const std::vector<cv::Point2f>& PointTrajectory::Get() const { return pts_; }
 
 void PointTrajectory::Draw(cv::Mat& image, const PointTrajectory& traj) {
   if (traj.pts_.empty()) {
     return;
   }
   cv::Scalar colour(0, 200, 0);
-  for (size_t i = 0; i < traj.pts_.size()-1; ++i) {
-    cv::line(image, traj.pts_[i], traj.pts_[i+1], colour, 1, CV_AA);
+  for (size_t i = 0; i < traj.pts_.size() - 1; ++i) {
+    cv::line(image, traj.pts_[i], traj.pts_[i + 1], colour, 1, CV_AA);
   }
   cv::circle(image, traj.pts_.back(), 2, colour, -1);
 }
@@ -51,19 +50,19 @@ void PointTrajectory::Warp(const cv::Mat& flow, PointTrajectory& traj) {
   traj.Add(cv::Point2f(x + warp[0], y + warp[1]));
 }
 
-TrajectorySet TrajectorySet::InitializeRegularGrid(
-      const cv::Size& size, int gap, int trajectory_length) {
+TrajectorySet TrajectorySet::InitializeRegularGrid(const cv::Size& size,
+                                                   int gap,
+                                                   int trajectory_length) {
   int cols = size.width;
   int rows = size.height;
   int nx = cols / gap;
   int ny = rows / gap;
   CHECK(nx > 0 && ny > 0);
-  auto points = Meshgrid(
-      Linspace(0.0f + gap / 2.0, cols - gap / 2.0, nx),
-      Linspace(0.0f + gap / 2.0, rows - gap / 2.0, ny));
+  auto points = Meshgrid(Linspace(0.0f + gap / 2.0, cols - gap / 2.0, nx),
+                         Linspace(0.0f + gap / 2.0, rows - gap / 2.0, ny));
   TrajectorySet set;
   set.trajectories_.reserve(points.size());
-  for (auto& pair: points) {
+  for (auto& pair : points) {
     cv::Point2f pt(pair.first, pair.second);
     set.trajectories_.push_back(PointTrajectory(pt, trajectory_length));
   }
@@ -82,4 +81,4 @@ void TrajectorySet::Warp(const cv::Mat& flow, TrajectorySet& set) {
   }
 }
 
-} // namespace flowthrone
+}  // namespace flowthrone
