@@ -15,6 +15,7 @@
 #include "io.h"
 #include "signal_handling.h"
 #include "optical_flow_model.h"
+#include "point_trajectory.h"
 
 static const std::string gUsageMessage = R"(
 Tool for running and visualizing optical flow.
@@ -33,9 +34,8 @@ DEFINE_string(img2, "", "Filename of image2");
 DEFINE_string(output, "", "Output image or video filename");
 DEFINE_bool(visualize, false,
             "Whether the results should be visualized or not.");
-DEFINE_bool(more, false,
-            "Whether to visualize even more artifacts. This is inactive "
-            "unless '--visualize' is on");
+DEFINE_bool(visualize_trajectories, false,
+            "Whether to visualize even more artifacts.");
 DEFINE_string(options, "config/flowthrone.pbtxt",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
@@ -59,6 +59,15 @@ std::unique_ptr<cv::VideoWriter> OpenVideo(const std::string& filename,
   if (filename.find(".webm") != std::string::npos) {
     fourcc = CV_FOURCC('V', 'P', '8', '0');
   }
+  if (filename.find(".x264") != std::string::npos) {
+    fourcc = CV_FOURCC('X','2','6','4');
+  }
+  if (filename.find(".mp4") != std::string::npos) {
+    fourcc = CV_FOURCC('M','J','P','G');
+  }
+  fourcc = CV_FOURCC('H','2','6','4');
+  fourcc = CV_FOURCC('M','J','P','G');
+  fourcc = CV_FOURCC('M', 'P', '4', '2');
   auto video = std::make_unique<cv::VideoWriter>(filename, fourcc, fps, size);
   CHECK(video->isOpened()) << "Could not successfully open video for writing "
                            << filename;
@@ -74,15 +83,26 @@ int main(int argc, char** argv) {
       OpticalFlowModel::Create(FLAGS_options);
 
   std::unique_ptr<cv::VideoWriter> video_writer;
+
+  cv::Size image_sz = images.back().size();
   if (!FLAGS_output.empty() && !FLAGS_video.empty()) {
-    int fps = 30;
-    cv::Size sz(images[1].cols * 2, images[1].rows);
-    video_writer = OpenVideo(FLAGS_output, sz, fps);
+    int fps = 15;
+    cv::Size video_sz = image_sz;
+    if (FLAGS_visualize_trajectories) {
+      video_sz = cv::Size(image_sz.width*3, image_sz.height);
+    } else {
+      video_sz = cv::Size(image_sz.width*2, image_sz.height);
+    }
+    video_writer = OpenVideo(FLAGS_output, video_sz, fps);
   }
 
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
   // we do not complete all frames).
   flowthrone::InstallSigIntHandler();
+
+  constexpr int kPixelGap = 10;
+  constexpr int kTrajectoryLength = 3;
+  PointTrajectoryFlow points(image_sz, kPixelGap, kTrajectoryLength);
   while (true) {
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
@@ -97,16 +117,17 @@ int main(int argc, char** argv) {
     cv::Mat predicted_flow;
     model->Run(images[0], images[1], &predicted_flow);
 
+        
+    points.WarpForward(predicted_flow);
+
     // Visualizations/output.
     cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
+    if (FLAGS_visualize_trajectories) {
+      cv::Mat points_vis = images[1].clone();
+      points.Draw(points_vis);
+      vis = HorizontalConcat(vis, points_vis);
+    }
     if (FLAGS_visualize) {
-      if (FLAGS_more) {
-        // Show warped points in the two images.
-        cv::Mat I0_vis, I1_vis;
-        std::tie(I0_vis, I1_vis) =
-            OverlayWarpedPoints(images[0], images[1], predicted_flow);
-        cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
-      }
       cv::imshow("image", vis);
       cv::waitKey(0);
     }
