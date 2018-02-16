@@ -52,26 +52,32 @@ class Feeder {
   static std::unique_ptr<Feeder> Create();
 };
 
-int main(int argc, char** argv) {
-  std::unique_ptr<OpticalFlowModel> model =
-      OpticalFlowModel::Create(FLAGS_options);
+std::unique_ptr<cv::VideoWriter> OpenVideo(const std::string& filename,
+                                           cv::Size size, int fps) {
+  // Guess fourcc.
+  int fourcc = CV_FOURCC('M', 'P', '4', '2');
+  if (filename.find(".webm") != std::string::npos) {
+    fourcc = CV_FOURCC('V', 'P', '8', '0');
+  }
+  auto video = std::make_unique<cv::VideoWriter>(filename, fourcc, fps, size);
+  CHECK(video->isOpened()) << "Could not successfully open video for writing "
+                           << filename;
+  return std::move(video);
+}
 
+int main(int argc, char** argv) {
   std::unique_ptr<Feeder> data_feeder = Feeder::Create();
   std::vector<cv::Mat> images(2);
   CHECK(data_feeder->next(&images[1])) << "Could not read first image.";
+  
+  std::unique_ptr<OpticalFlowModel> model =
+      OpticalFlowModel::Create(FLAGS_options);
 
   std::unique_ptr<cv::VideoWriter> video_writer;
   if (!FLAGS_output.empty() && !FLAGS_video.empty()) {
-    // For time being, defaulting to .webm videos, since this is the only thing
-    // that apparently displays/works reasonably well. In the future, we can
-    // decide the codec based on the extension or something.
-    // int fourcc = CV_FOURCC('M', 'P', '4', '2');
-    int fourcc = CV_FOURCC('V', 'P', '8', '0');
     int fps = 30;
     cv::Size sz(images[1].cols * 2, images[1].rows);
-    video_writer.reset(new cv::VideoWriter(FLAGS_output, fourcc, fps, sz));
-    CHECK(video_writer->isOpened())
-        << "Could not successfully open video for writing " << FLAGS_output;
+    video_writer = OpenVideo(FLAGS_output, sz, fps);
   }
 
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if

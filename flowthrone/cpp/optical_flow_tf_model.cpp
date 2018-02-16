@@ -39,7 +39,8 @@ const tf::NodeDef* GetTensorByName(const tf::GraphDef& graph,
 tf::TensorShapeProto GetTensorShapeProto(const tf::GraphDef& graph_def,
                                          const std::string& name) {
   const std::string kShapeKey = "_output_shapes";
-  const tf::NodeDef* node = CHECK_NOTNULL(GetTensorByName(graph_def, name));
+  const tf::NodeDef* node = GetTensorByName(graph_def, name);
+  CHECK(node) << "Could not find tensor called '" << name << "'";
   CHECK(node->attr().count(kShapeKey));
   CHECK_GE(node->attr().at(kShapeKey).list().shape_size(), 1);
   return node->attr().at(kShapeKey).list().shape(0);

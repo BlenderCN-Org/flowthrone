@@ -69,6 +69,7 @@ y = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='y')
 # w = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='w')
 
 flownet = FlowNet(x1, x2)
+prediction = tf.identity(flownet.predictions[0], name='prediction')
 
 # Config to turn on JIT compilation
 session_config = tf.ConfigProto()
@@ -97,6 +98,7 @@ with tf.Session(config=session_config) as sess:
         if manager.sigint_happened:
             print "SIGINT was observed, saving checkpoint."
             manager.save_checkpoint(sess, iter)
+            manager.save_model(sess, iter)
             break
 
         if iter > 0 and iter % config['dataset_reload_iter'] == 0:

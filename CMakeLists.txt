@@ -122,7 +122,7 @@ target_link_libraries(test_utils
 SET(CONFIG_PBTXT ${CMAKE_CURRENT_BINARY_DIR}/config/flowthrone.pbtxt)
 configure_file(flowthrone/config/flowthrone.pbtxt ${CONFIG_PBTXT} COPYONLY)
 
-set(CURRENT_TF_MODEL "model_v3_128x128")
+set(CURRENT_TF_MODEL "model_v5_128x128")
 set(LOCAL_CURRENT_TF_MODEL ${CMAKE_CURRENT_BINARY_DIR}/${CURRENT_TF_MODEL})
 # After copying the default pbtxt, edit it in place with the full-path to the
 # downloaded trained network.
@@ -134,7 +134,9 @@ execute_process(COMMAND sed -i "s|export_dir: \".*\"|export_dir: \"${LOCAL_CURRE
 # these models are nontrivially large.
 if(NOT TF_MODEL_DOWNLOADED)
   message(STATUS "Trying to download a tensorflow model: ${CURRENT_TF_MODEL}")
-  execute_process(COMMAND wget https://www.dropbox.com/s/ivhyrzsi9bfv8bh/${CURRENT_TF_MODEL}.tar.gz)
+  #execute_process(COMMAND wget https://www.dropbox.com/s/ivhyrzsi9bfv8bh/model_v3_128x128.tar.gz)
+  execute_process(COMMAND wget https://www.dropbox.com/s/lmwmc0trqekw32n/model_v5_128x128.tar.gz)
+  
   message(STATUS "Trying to untar the tensorflow model...")
   execute_process(COMMAND tar -xvf ${CURRENT_TF_MODEL}.tar.gz)
   execute_process(COMMAND rm ${CURRENT_TF_MODEL}.tar.gz)
