@@ -15,6 +15,7 @@
 #include "io.h"
 #include "signal_handling.h"
 #include "optical_flow_model.h"
+#include "point_trajectory.h"
 
 static const std::string gUsageMessage = R"(
 Tool for running and visualizing optical flow.
@@ -74,15 +75,20 @@ int main(int argc, char** argv) {
       OpticalFlowModel::Create(FLAGS_options);
 
   std::unique_ptr<cv::VideoWriter> video_writer;
+  cv::Size image_sz(images[1].cols * 2, images[1].rows);
   if (!FLAGS_output.empty() && !FLAGS_video.empty()) {
     int fps = 30;
-    cv::Size sz(images[1].cols * 2, images[1].rows);
-    video_writer = OpenVideo(FLAGS_output, sz, fps);
+    video_writer = OpenVideo(FLAGS_output, image_sz, fps);
   }
 
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
   // we do not complete all frames).
   flowthrone::InstallSigIntHandler();
+  
+  constexpr int kPixelGap = 10;
+  constexpr int kTrajectoryLength = 2;
+  TrajectorySet trajectory_set = 
+      TrajectorySet::InitializeRegularGrid(image_sz, kPixelGap, kTrajectoryLength);
   while (true) {
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
@@ -101,11 +107,15 @@ int main(int argc, char** argv) {
     cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
     if (FLAGS_visualize) {
       if (FLAGS_more) {
-        // Show warped points in the two images.
-        cv::Mat I0_vis, I1_vis;
-        std::tie(I0_vis, I1_vis) =
-            OverlayWarpedPoints(images[0], images[1], predicted_flow);
-        cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
+        cv::Mat I1_vis = images[1].clone();
+        TrajectorySet::Warp(predicted_flow, trajectory_set);
+        TrajectorySet::Draw(I1_vis, trajectory_set);
+        cv::imshow("warped_points", I1_vis);
+        //// Show warped points in the two images.
+        //cv::Mat I0_vis, I1_vis;
+        //std::tie(I0_vis, I1_vis) =
+        //    OverlayWarpedPoints(images[0], images[1], predicted_flow);
+        //cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
       }
       cv::imshow("image", vis);
       cv::waitKey(0);

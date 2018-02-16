@@ -78,6 +78,8 @@ add_library(flowthrone STATIC
   flowthrone/cpp/tf_utils.h
   flowthrone/cpp/signal_handling.cpp
   flowthrone/cpp/signal_handling.h
+  flowthrone/cpp/point_trajectory.cpp
+  flowthrone/cpp/point_trajectory.h
 )
 
 target_link_libraries(flowthrone
