@@ -1,3 +1,6 @@
 export_dir: "point-this-to-your-favorite-tensorflow-model"
+input_tensor_name: ["x1", "x2"]
+output_tensor_name: ["prediction"]
+
 sliding_window: true
 window_stride: 0.25  

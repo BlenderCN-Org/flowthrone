@@ -47,8 +47,19 @@ std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
                                               const std::vector<float>& y);
 
 // Returns a matrix whose value is 1 at the center, and whose values decrease
-// (bilinearly) to zero at the boundaries.
+// closer to the boundaries.
+
+// Returns a triangle kernel -- values decrease (bilinearly) to zero at the
+// boundaries.
 cv::Mat TriangleKernel(cv::Size size);
+
+// Returns a Laplacian kernel.
+// The smaller the sigma, the more aggressive is the decay -- the value at
+// the boundary is exp(-1/sigma).
+cv::Mat ExponentialKernel(cv::Size size, float sigma = 0.5);
+
+// Returns a Gaussian kernel. Value at the boundary is exp(-0.5/sigma^2)
+cv::Mat SquaredExponentialKernel(cv::Size size, float sigma = 0.5);
 
 // When splitting the image, whether to enforce that the stride size should
 // be constant, or whether the patch size should be constant.

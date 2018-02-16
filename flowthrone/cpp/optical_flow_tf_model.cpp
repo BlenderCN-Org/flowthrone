@@ -73,6 +73,12 @@ void CheckNumberOfChannels(const cv::Mat& x, int expected_channels) {
          "expected number of channels.";
 }
 
+std::pair<std::string, tf::Tensor> CreateIsTrainingPlaceholderPair() {
+  tf::Tensor is_training(tf::DT_BOOL, tf::TensorShape({}));
+  is_training.flat<bool>()(0) = false;
+  return std::make_pair("is_training", std::move(is_training));
+}
+
 }  // namespace
 
 OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(
@@ -82,29 +88,70 @@ OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(
   InitializeFromSavedModel(opts_.export_dir(), kModelTag);
 }
 
-OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {
-  if (session_) {
-    session_->Close().IgnoreError();
+std::unique_ptr<Context> Context::Create(
+    std::unique_ptr<tensorflow::Session> session, const tf::GraphDef& graph_def,
+    const OpticalFlowTensorFlowModelOptions& opts) {
+  std::unique_ptr<Context> context(new Context);
+  CHECK_EQ(2, opts.input_tensor_name_size())
+      << "You must specify exactly two input tensors in your options. Probably "
+         "these should be the names of the two input images to the network. ";
+  context->input_names = std::vector<std::string>(
+      opts.input_tensor_name().begin(), opts.input_tensor_name().end());
+  CHECK_EQ(1, opts.output_tensor_name_size())
+      << "You must specify exactly one output tensor in your options. Probably "
+         "this should be the output flow prediction tensor.";
+  context->output_names = std::vector<std::string>(
+      opts.output_tensor_name().begin(), opts.output_tensor_name().end());
+
+  context->input_shape = GetInputTensorShape(graph_def, context->input_names[0],
+                                             context->input_names[1]);
+  context->output_shape =
+      GetTensorShape(GetTensorShapeProto(graph_def, context->output_names[0]));
+  // TODO: cv::Size(width, height). Is input_shape.dim_size() the same?
+  context->input_size = cv::Size(context->input_shape.dim_size(0),
+                                 context->input_shape.dim_size(1));
+  context->output_size = cv::Size(context->output_shape.dim_size(0),
+                                  context->output_shape.dim_size(1));
+  context->need_is_training_placeholder =
+      static_cast<bool>(GetTensorByName(graph_def, "is_training"));
+  context->session = std::move(session);
+  return std::move(context);
+}
+
+Context::~Context() {
+  if (session) {
+    session->Close().IgnoreError();
   }
 }
 
-Context Context::Create(const OpticalFlowTensorFlowModelOptions& opts,
-                        const tf::GraphDef& graph_def) {
-  Context context;
-  // TODO: normally these would be read from the options.
-  context.input_names = std::vector<std::string>{"x1", "x2"};
-  context.output_name = "prediction";
+// TODO: Network is fully-convolutional, so there needs to be a flag to
+// optionally keep inputs as they are -- and run the network without doing
+// any resizing.
+void Context::RunInference(const cv::Mat& I0f_in, const cv::Mat& I1f_in,
+                           cv::Mat* flow) {
+  // Size of the input fed into this function.
+  // This will be used to resize the output.
+  cv::Size original_input_output_size = I0f_in.size();
 
-  context.input_shape = GetInputTensorShape(graph_def, context.input_names[0],
-                                            context.input_names[1]);
-  context.output_shape =
-      GetTensorShape(GetTensorShapeProto(graph_def, context.output_name));
-  // TODO: cv::Size(width, height). Is input_shape.dim_size() the same?
-  context.input_size = cv::Size(context.input_shape.dim_size(0),
-                                context.input_shape.dim_size(1));
-  context.output_size = cv::Size(context.output_shape.dim_size(0),
-                                 context.output_shape.dim_size(1));
-  return context;
+  std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
+  inputs_tf.push_back(std::make_pair(input_names[0], tf::Tensor()));
+  inputs_tf.push_back(std::make_pair(input_names[1], tf::Tensor()));
+  if (need_is_training_placeholder) {
+    inputs_tf.push_back(CreateIsTrainingPlaceholderPair());
+  }
+
+  std::vector<tf::Tensor> outputs_tf;
+
+  cv::Mat I0f, I1f;
+  cv::resize(I0f_in, I0f, input_size);
+  cv::resize(I1f_in, I1f, input_size);
+  AsTensor(I0f, &inputs_tf[0].second);
+  AsTensor(I1f, &inputs_tf[1].second);
+  CHECK_STATUS(session->Run(inputs_tf, {output_names[0]}, {}, &outputs_tf));
+  CHECK_EQ(1, outputs_tf.size());
+  const tf::Tensor& output_tf = outputs_tf[0];
+  AsMat(output_tf, flow);
+  *flow = ResampleFlow(*flow, original_input_output_size);
 }
 
 void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
@@ -116,48 +163,25 @@ void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
   tf::SavedModelBundle bundle;
   CHECK_STATUS(tf::LoadSavedModel(tf::SessionOptions(), tf::RunOptions(),
                                   export_dir, {tag}, &bundle));
-  session_ = std::move(bundle.session);
-  context_ = Context::Create(opts_, bundle.meta_graph_def.graph_def());
+
+  context_ = Context::Create(std::move(bundle.session),
+                             bundle.meta_graph_def.graph_def(), opts_);
 }
 
-void OpticalFlowTensorFlowModel::RunInference(tf::Session& session,
-                                              const Context& context,
-                                              const cv::Mat& I0f_in,
-                                              const cv::Mat& I1f_in,
-                                              cv::Mat* flow) {
-  // Size of the input fed into this function.
-  // This will be used to resize the output.
-  cv::Size original_input_output_size = I0f_in.size();
-
-  std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
-  inputs_tf.push_back(std::make_pair(context.input_names[0], tf::Tensor()));
-  inputs_tf.push_back(std::make_pair(context.input_names[1], tf::Tensor()));
-  std::vector<tf::Tensor> outputs_tf;
-
-  cv::Mat I0f, I1f;
-  cv::resize(I0f_in, I0f, context.input_size);
-  cv::resize(I1f_in, I1f, context.input_size);
-  AsTensor(I0f, &inputs_tf[0].second);
-  AsTensor(I1f, &inputs_tf[1].second);
-  CHECK_STATUS(session.Run(inputs_tf, {context.output_name}, {}, &outputs_tf));
-  CHECK_EQ(1, outputs_tf.size());
-  const tf::Tensor& output_tf = outputs_tf[0];
-  AsMat(output_tf, flow);
-  *flow = ResampleFlow(*flow, original_input_output_size);
-}
+OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {}
 
 bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
                                      cv::Mat* flow) {
-  CheckNumberOfChannels(I0, context_.input_shape.dim_size(2));
-  CheckNumberOfChannels(I1, context_.input_shape.dim_size(2));
+  CheckNumberOfChannels(I0, context_->input_shape.dim_size(2));
+  CheckNumberOfChannels(I1, context_->input_shape.dim_size(2));
   cv::Mat I0f = MaybeConvertTo32F(I0);
   cv::Mat I1f = MaybeConvertTo32F(I1);
 
   if (!opts_.sliding_window()) {
-    RunInference(*session_, context_, I0f, I1f, flow);
+    context_->RunInference(I0f, I1f, flow);
   } else {
     // Doesn't __really__ need to be the case.
-    cv::Size patch_sz = context_.input_size;
+    cv::Size patch_sz = context_->input_size;
 
     int stride_x = patch_sz.width * opts_.window_stride();
     int stride_y = patch_sz.height * opts_.window_stride();
@@ -165,29 +189,30 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
         SplitImage(I0.size(), patch_sz, cv::Size(stride_x, stride_y),
                    SplitImageMode::kSizeConstant);
     *flow = cv::Mat(I0.size(), CV_32FC2, cv::Scalar(0.0f));
+    cv::Mat& flow_ref = std::ref(*flow);
     cv::Mat counts = cv::Mat(I0.size(), CV_32FC1, cv::Scalar(0));
 
-    cv::Mat kernel = TriangleKernel(patch_sz);
+    cv::Mat kernel = SquaredExponentialKernel(patch_sz);
+
     for (const auto& rect : patch_locations) {
       // At the boundaries, rect.size() != patch_sz, so the patch (and the
       // kernel) may need to be resized even if patch_sz == network input size.
       cv::Mat I0f_patch = I0f(rect);
       cv::Mat I1f_patch = I1f(rect);
       cv::Mat flow_patch;
-      RunInference(*session_, context_, I0f_patch, I1f_patch, &flow_patch);
+      context_->RunInference(I0f_patch, I1f_patch, &flow_patch);
 
       cv::Mat this_kernel;
       cv::resize(kernel, this_kernel, rect.size());
       cv::Mat kernel_32fc2;
       cv::merge(std::vector<cv::Mat>{this_kernel, this_kernel}, kernel_32fc2);
       cv::multiply(flow_patch, kernel_32fc2, flow_patch);
-      // TODO: fix insane syntax
-      cv::add((*flow)(rect), flow_patch, (*flow)(rect));
+      cv::add(flow_ref(rect), flow_patch, flow_ref(rect));
       cv::add(counts(rect), this_kernel, counts(rect));
     }
     cv::Mat counts_32fc2;
     cv::merge(std::vector<cv::Mat>{counts, counts}, counts_32fc2);
-    *flow = *flow / counts_32fc2;
+    flow_ref = flow_ref / counts_32fc2;
   }
   return true;
 }

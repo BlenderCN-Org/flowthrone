@@ -27,6 +27,8 @@ for f in [UPLOAD_FOLDER, EXAMPLES_FOLDER, RESULTS_FOLDER]:
         os.mkdir(f)
 
 # Compile the proto if necessary.
+# Note: this is a little bit dangerous -- the .proto may change, and the
+# compiled python will not be recompiled.
 if not os.path.exists(os.path.join(SERVER_PATH, 'flowthrone_pb2.py')) and \
     not os.path.exists(os.path.join(SERVER_PATH, 'flowthrone_pb2.pyc')):
     proto_path = os.path.join(FLOWTHRONE_ROOT, 'flowthrone', 'proto')

@@ -81,10 +81,8 @@ def results():
 def result(result_id):
     p = os.path.join(config.RESULTS_FOLDER, result_id)
     result_pbtxt = [os.path.join(p, f) for f in os.listdir(p) if f.endswith('pbtxt')][0]
-    result_str = open(result_pbtxt, 'r').read()
+    stats = utils.read_evaluation_results_pbtxt(result_pbtxt)
 
-    stats = flowthrone_pb2.EvaluationOutput()
-    google.protobuf.text_format.Merge(result_str, stats)
     return render_template('result.html', stats=stats, result_id=result_id) 
 
 """ Returns a JSON with results for a given id. """

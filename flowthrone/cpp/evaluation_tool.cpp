@@ -25,7 +25,7 @@ Example:
 
 DEFINE_string(eval_input, "", "EvaluationInput proto filename");
 DEFINE_string(eval_output, "output.pbtxt", "EvaluationOutput proto filename");
-DEFINE_string(options, "",
+DEFINE_string(options, "config/flowthrone.pbtxt",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
 DEFINE_bool(write_images, false,
@@ -70,10 +70,13 @@ int main(int argc, char** argv) {
   std::unique_ptr<OpticalFlowModel> solver =
       OpticalFlowModel::Create(FLAGS_options);
 
+  const std::vector<int> kPercentiles{10, 25, 50, 75, 90};
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());
-  for (const auto& datum : evaluation_config.datum()) {
-    LOG(INFO) << "Running on: " << datum.identifier();
+  for (int i = 0; i < evaluation_config.datum_size(); ++i) {
+    const auto& datum = evaluation_config.datum(i);
+    LOG(INFO) << "Running on: " << datum.identifier() << " " << i << "/"
+              << evaluation_config.datum_size();
 
     cv::Mat I0, I1, flow_gt, predicted_flow;
     LoadTriplet(datum, &I0, &I1, &flow_gt);
@@ -89,7 +92,7 @@ int main(int argc, char** argv) {
       // Images are saved in the same directory as the output proto.
       cv::Mat vis = VisualizeTuple(I0, I1, predicted_flow, flow_gt);
       std::string image_filename =
-          (base_output_dir / path(datum.identifier() + ".png")).string();
+          (base_output_dir / path(datum.identifier() + ".jpg")).string();
       LOG(INFO) << "Writing " << image_filename;
       cv::imwrite(image_filename, vis);
     }
@@ -107,6 +110,9 @@ int main(int argc, char** argv) {
     // Some flow evaluations may take a REALLY LONG TIME, so it's nicer to
     // write this small proto regularly, rather than waiting until the end.
     *output.mutable_average_summary() = ComputeAverageSummary(output.result());
+    *output.mutable_percentile_summary() =
+        ComputePercentileSummary(output.result(), kPercentiles);
+
     WriteProtoToFile(FLAGS_eval_output, output);
     VLOG(1) << "Processed " << output.result_size() << " results. Updated "
             << FLAGS_eval_output;

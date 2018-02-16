@@ -93,4 +93,38 @@ EvaluationOutput::Result ComputeAverageSummary(
   return summary;
 }
 
+google::protobuf::Map<int, EvaluationOutput::Result> ComputePercentileSummary(
+    const google::protobuf::RepeatedPtrField<EvaluationOutput::Result>& results,
+    const std::vector<int>& percentiles) {
+  CHECK_LE(1, results.size());
+
+  std::vector<float> ee;
+  std::vector<float> ae;
+  std::vector<float> elapsed;
+  ee.reserve(results.size());
+  ae.reserve(results.size());
+  elapsed.reserve(results.size());
+  for (const auto& result : results) {
+    ee.push_back(result.average_endpoint_error());
+    ae.push_back(result.average_angular_error());
+    elapsed.push_back(result.elapsed());
+  }
+  std::sort(ee.begin(), ee.end());
+  std::sort(ae.begin(), ae.end());
+  std::sort(elapsed.begin(), elapsed.end());
+
+  google::protobuf::Map<int, EvaluationOutput::Result> map;
+  for (int percentile : percentiles) {
+    CHECK(0 <= percentile && percentile <= 100)
+        << "Percentile must be specified as an integer in {0, .., 100} range.";
+    int idx = (percentile / 100.0f) * (results.size() - 1);
+    EvaluationOutput::Result summary;
+    summary.set_average_angular_error(ae[idx]);
+    summary.set_average_endpoint_error(ee[idx]);
+    summary.set_elapsed(elapsed[idx]);
+    map[percentile] = std::move(summary);
+  }
+  return map;
+}
+
 }  // namespace flowthrone

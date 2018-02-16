@@ -21,8 +21,17 @@ $(document).ready(function () {
         <td>{{ '{:.3f}'.format(stats.average_summary.average_angular_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.average_summary.average_endpoint_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.average_summary.elapsed) }}</td>
-      </tr>  
-   
+      </tr> 
+      {% for p in stats.percentile_summary|sort %}
+      <tr>
+        <td>{{p}}-th percentile</td>
+        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_angular_error) }}</td>
+        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_endpoint_error) }}</td>
+        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].elapsed) }}</td>
+      </tr>
+
+      {% endfor %}
+
     {% for result in stats.result %}
       <tr>
         <td><a href="{{ url_for('uploaded_file', filename='results/' + result_id + '/' + result.identifier + '.jpg') }}">{{ result.identifier }}</a></td>

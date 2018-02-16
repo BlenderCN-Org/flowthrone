@@ -10,16 +10,34 @@ namespace internal {
 
 struct Context {
   std::vector<std::string> input_names;
-  std::string output_name;
+  std::vector<std::string> output_names;
   // Layout is height, width, number-of-channels.
   tensorflow::TensorShape input_shape;
   tensorflow::TensorShape output_shape;
   // cv::Size analogues of the above.
   cv::Size input_size;
   cv::Size output_size;
+  // Will be 'true' if there exists a 'is_training' tensor in the graph.
+  // When this is the case, the network was trained with batch normalization,
+  // and an additional tensor needs to be added to the tf::Session::Run(..)
+  // call.
+  bool need_is_training_placeholder = false;
 
-  static Context Create(const OpticalFlowTensorFlowModelOptions& opts,
-                        const tensorflow::GraphDef& graph_def);
+  std::unique_ptr<tensorflow::Session> session;
+
+  static std::unique_ptr<Context> Create(
+      std::unique_ptr<tensorflow::Session> session,
+      const tensorflow::GraphDef& graph_def,
+      const OpticalFlowTensorFlowModelOptions& opts);
+  ~Context();
+
+  // Given two images (possibly different resolutions, and not necessarily
+  // matching the input resolution of the network), runs inference and fills
+  // in the result.
+  // Input images must be of type CV_32F, and the output image will similarly
+  // be CV_32F.
+  void RunInference(const cv::Mat& I0f_in, const cv::Mat& I1f_in,
+                    cv::Mat* flow);
 };
 
 }  // namespace internal
@@ -35,26 +53,9 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
 
-  // TODO: DOCUMENTATION OUT-OF-DATE.
-  // Helper for running inference that resizes input/output images before/after
-  // running inference.
-  // Note: this function will perform some unnecessary allocation when running
-  // the network multiple times.
-  // input_size -- size that images should be resized to prior to sending to
-  //               the network.
-  // target_size -- size that output image should be resized to after being
-  //                received from the network.
-  // Both images must have type CV_32F, but of arbitrary size.
-  // Output image will be CV_32FC2, and will be resized to target_size.
-  void RunInference(tensorflow::Session& session,
-                    const internal::Context& context, const cv::Mat& I0f,
-                    const cv::Mat& I1f, cv::Mat* output);
-
   OpticalFlowTensorFlowModelOptions opts_;
 
-  // These two can form a single class, and RunInference can be its member.
-  std::unique_ptr<tensorflow::Session> session_;
-  internal::Context context_;
+  std::unique_ptr<internal::Context> context_;
 };
 
 }  // namespace flowthrone

@@ -181,4 +181,11 @@ def schedule_task(request, upload_folder):
         subprocess.call(cmd, stdout=f, stderr=f)
     return task_uuid 
 
-
+""" Parses pbtxt file and returns EvaluationOutput message. """
+def read_evaluation_results_pbtxt(filename):
+    import flowthrone_pb2
+    import google.protobuf.text_format
+    result_str = open(filename, 'r').read()
+    stats = flowthrone_pb2.EvaluationOutput()
+    google.protobuf.text_format.Merge(result_str, stats)
+    return stats

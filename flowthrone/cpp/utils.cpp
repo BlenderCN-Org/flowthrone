@@ -110,16 +110,50 @@ std::vector<std::pair<float, float>> Meshgrid(const std::vector<float>& x,
 cv::Mat TriangleKernel(cv::Size size) {
   int xc = size.width / 2;
   int yc = size.height / 2;
-  cv::Mat tri(size, CV_32FC1);
-  for (int y = 0; y < tri.rows; ++y) {
-    float* row = reinterpret_cast<float*>(tri.row(y).data);
+  cv::Mat kernel(size, CV_32FC1);
+  for (int y = 0; y < kernel.rows; ++y) {
+    float* row = reinterpret_cast<float*>(kernel.row(y).data);
     float wy = yc > 0 ? 1.0f - std::abs(y - yc) / float(yc) : 1.0f;
-    for (int x = 0; x < tri.cols; ++x) {
+    for (int x = 0; x < kernel.cols; ++x) {
       float wx = xc > 0 ? 1.0f - std::abs(x - xc) / float(xc) : 1.0f;
       row[x] = wx * wy;
     }
   }
-  return tri;
+  return kernel;
+}
+
+cv::Mat ExponentialKernel(cv::Size size, float sigma) {
+  float xc = size.width / 2.0f;
+  float yc = size.height / 2.0f;
+  cv::Mat kernel(size, CV_32FC1);
+  for (int y = 0; y < kernel.rows; ++y) {
+    float* row = reinterpret_cast<float*>(kernel.row(y).data);
+    float dy = (y - yc) / yc;
+    for (int x = 0; x < kernel.cols; ++x) {
+      float dx = (x - xc) / xc;
+      float dist = std::sqrt(dx * dx + dy * dy);
+      row[x] = exp(-dist / sigma);
+    }
+  }
+  return kernel;
+}
+
+cv::Mat SquaredExponentialKernel(cv::Size size, float sigma) {
+  float xc = size.width / 2.0f;
+  float yc = size.height / 2.0f;
+  cv::Mat kernel(size, CV_32FC1);
+  float half_inv_sigma_sq = 0.5f / (sigma * sigma);
+  for (int y = 0; y < kernel.rows; ++y) {
+    float* row = reinterpret_cast<float*>(kernel.row(y).data);
+    float dy = (y - yc) / yc;
+    float dy_sq = dy * dy;
+    for (int x = 0; x < kernel.cols; ++x) {
+      float dx = (x - xc) / xc;
+      float dx_sq = dx * dx;
+      row[x] = exp(-half_inv_sigma_sq * (dx_sq + dy_sq));
+    }
+  }
+  return kernel;
 }
 
 std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
