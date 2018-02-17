@@ -86,9 +86,8 @@ int main(int argc, char** argv) {
   flowthrone::InstallSigIntHandler();
 
   constexpr int kPixelGap = 10;
-  constexpr int kTrajectoryLength = 2;
-  TrajectorySet trajectory_set = TrajectorySet::InitializeRegularGrid(
-      image_sz, kPixelGap, kTrajectoryLength);
+  constexpr int kTrajectoryLength = 3;
+  PointTrajectoryFlow points(image_sz, kPixelGap, kTrajectoryLength);
   while (true) {
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
@@ -108,8 +107,9 @@ int main(int argc, char** argv) {
     if (FLAGS_visualize) {
       if (FLAGS_more) {
         cv::Mat I1_vis = images[1].clone();
-        TrajectorySet::Warp(predicted_flow, trajectory_set);
-        TrajectorySet::Draw(I1_vis, trajectory_set);
+
+        points.WarpForward(predicted_flow);
+        points.Draw(I1_vis);
         cv::imshow("warped_points", I1_vis);
         //// Show warped points in the two images.
         // cv::Mat I0_vis, I1_vis;
