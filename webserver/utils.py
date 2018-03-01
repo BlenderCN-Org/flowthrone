@@ -180,3 +180,5 @@ def schedule_task(request, upload_folder):
     with open(output_log_filename, 'w') as f:
         subprocess.call(cmd, stdout=f, stderr=f)
     return task_uuid 
+
+

@@ -41,7 +41,6 @@ function load_result(result_id) {
   $('#result-visualization').show();
   callback = function(payload) {
     result = JSON.parse(payload);
-    console.log(result);
     // Paste stderr output.
     $('#result-stderr').text(result['stderr']);
 
@@ -93,10 +92,8 @@ function load_result(result_id) {
 <script>
 // Remove stupid HTML video controls that obscure most of the video.
 $("#result-video").hover(function() {
-  console.log("hover");
   $(this).prop("controls", true);
 }, function() {
-  console.log("hoveroff");
   $(this).prop("controls", false);
 });
 

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-results').addClass('link-active');
+});
+</script>
+
+<div class="list-group">
+{% for result in results %}
+<a href="/result/{{result}}" class="list-group-item list-group-item-action transparent">{{ result }}</a>
+{% endfor %}
+</div>
+
+</div><!-- /.container -->
+
+{% endblock %}

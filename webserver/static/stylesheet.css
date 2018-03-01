@@ -172,3 +172,8 @@ figure figcaption {
   font-size: small;
   text-align: center;
 }
+
+.table td {
+  padding: 0.25em;
+  border: none;
+}
