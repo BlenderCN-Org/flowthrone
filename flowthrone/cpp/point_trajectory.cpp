@@ -31,7 +31,9 @@ void PointTrajectory::Add(const cv::Point2f& pt) {
     pts_.erase(pts_.begin());
   }
 }
-
+int PointTrajectory::Age() const {
+  return age_;
+}
 const std::vector<cv::Point2f>& PointTrajectory::Get() const { return pts_; }
 
 const cv::Point2f* PointTrajectory::Last() const {
@@ -56,7 +58,11 @@ void PointTrajectory::Draw(cv::Mat& image, const PointTrajectory& traj) {
   if (traj.pts_.empty()) {
     return;
   }
-  cv::Scalar colour(0, 200, 0);
+  
+  constexpr int kMaxAge = 50;
+  float age_normalized = std::min<float>(kMaxAge, traj.age_)/kMaxAge;
+
+  cv::Scalar colour(0, 255*(1.0 - age_normalized), 255*age_normalized);
   for (size_t i = 0; i < traj.pts_.size() - 1; ++i) {
     cv::line(image, traj.pts_[i], traj.pts_[i + 1], colour, 1, CV_AA);
   }
@@ -153,6 +159,11 @@ void TrajectorySet::Initialize(const cv::Size& size, int gap,
 
 void TrajectorySet::RemoveGreedy(int gap,
                                  std::vector<PointTrajectory>& trajectories) {
+  // Sort trajectories by age, so that we end up keeping older ones.
+  auto comparator = [](const PointTrajectory& x, const PointTrajectory& y) {
+                      return x.Age() > y.Age();
+                    };
+  std::sort(trajectories.begin(), trajectories.end(), comparator);  
   float gap_sq = gap * gap;
   for (size_t i = 0; i < trajectories.size(); ++i) {
     const cv::Point2f& pt = *CHECK_NOTNULL(trajectories[i].Last());

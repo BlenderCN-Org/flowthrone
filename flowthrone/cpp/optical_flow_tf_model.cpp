@@ -132,6 +132,12 @@ void OpticalFlowTensorFlowModel::RunInference(tf::Session& session,
   std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
   inputs_tf.push_back(std::make_pair(context.input_names[0], tf::Tensor()));
   inputs_tf.push_back(std::make_pair(context.input_names[1], tf::Tensor()));
+
+  tf::Tensor is_training(tf::DT_BOOL, tf::TensorShape({}));
+  is_training.flat<bool>()(0) = false;
+  inputs_tf.push_back(std::make_pair("is_training", std::move(is_training)));
+  //LOG(INFO) << is_training.NumElements();
+  
   std::vector<tf::Tensor> outputs_tf;
 
   cv::Mat I0f, I1f;

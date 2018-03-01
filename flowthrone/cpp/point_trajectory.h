@@ -10,6 +10,7 @@ class PointTrajectory {
 
   const std::vector<cv::Point2f>& Get() const;
   const cv::Point2f* Last() const;
+  int Age() const;
   void Add(const cv::Point2f& pt);
   bool IsValid(const cv::Size& imsize) const;
 
@@ -40,8 +41,7 @@ class PointTrajectoryFlow {
   std::vector<PointTrajectory> trajectories_;
 };
 
-// A collection of static functions for dealing with a collection of
-// PointTrajectory objects.
+// Static functions for dealing with a collection of PointTrajectory objects.
 class TrajectorySet {
  public:
   TrajectorySet() = delete;
@@ -71,6 +71,7 @@ class TrajectorySet {
   static void Initialize(const cv::Size& imsize, int gap, int trajectory_length,
                          std::vector<PointTrajectory>& trajectories);
 
+  // Sorts trajectories by age and removes 'younger' trajectories.
   static void RemoveGreedy(int gap, std::vector<PointTrajectory>& trajectories);
 };
 

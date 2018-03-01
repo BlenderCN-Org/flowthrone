@@ -25,7 +25,7 @@ Example:
 
 DEFINE_string(eval_input, "", "EvaluationInput proto filename");
 DEFINE_string(eval_output, "output.pbtxt", "EvaluationOutput proto filename");
-DEFINE_string(options, "",
+DEFINE_string(options, "config/flowthrone.pbtxt",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
 DEFINE_bool(write_images, false,
@@ -72,8 +72,9 @@ int main(int argc, char** argv) {
 
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());
-  for (const auto& datum : evaluation_config.datum()) {
-    LOG(INFO) << "Running on: " << datum.identifier();
+  for (int i = 0; i < evaluation_config.datum_size(); ++i) {
+    const auto& datum = evaluation_config.datum(i);
+    LOG(INFO) << "Running on: " << datum.identifier() << " " << i << "/ " << evaluation_config.datum_size();
 
     cv::Mat I0, I1, flow_gt, predicted_flow;
     LoadTriplet(datum, &I0, &I1, &flow_gt);
