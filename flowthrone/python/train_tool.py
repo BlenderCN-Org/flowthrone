@@ -11,23 +11,31 @@ import numpy as np
 import shutil
 import time
 from tf_utils import resample_flow, angular_flow_error
-from flownet128 import FlowNet
+from flownet import FlowNet
 from training_manager import TrainingManager, \
         get_visualization_summary, variable_summary
 
-DATASET_PATH = os.path.join(os.environ['HOME'], 'data', 'flying_chairs_128x128')
+DATASET_PATH = os.path.join(os.environ['HOME'], 'data', 'flying_chairs_256x256')
 # Configuration used to run the training task.
 config = {
-    'num_train': 20000,
+    # How many examples to hold in memory
+    'num_train': 5000,
     'num_test': 1000,
+    # How often to reload dataset. If your dataset is small, or if you have
+    # a lot of memory, you can set this to zero (or a very large number), and
+    # never do it. But if you cannot fit the entire dataset into memory, this
+    # can be used to load the dataset every few iterations and select a
+    # different fraction of it.
+    'dataset_reload_iter': 1000, # how often to reload the dataset.
+
     'num_iterations': 1000000,
-    'batch_size': 70,
+    'batch_size': 18,
     'learning_rate': 5e-4,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
     'momentum': 0.9,
 
-    'image_size': 128,
+    'image_size': 256,
     # Path to the directory with images/groundtruth flow.
     'dataset_path': DATASET_PATH,
     'train_test_num_splits': 10,
@@ -39,16 +47,10 @@ config = {
     'visualization_iter': 1000, # how often to save images
     'print_iter':10, # how often to print stuff
     
-    # How often to reload dataset. If your dataset is small, or if you have
-    # a lot of memory, you can set this to zero (or a very large number), and
-    # never do it. But if you cannot fit the entire dataset into memory, this
-    # can be used to load the dataset every few iterations and select a
-    # different fraction of it.
-    'dataset_reload_iter': 1000, # how often to reload the dataset.
     # Experiment results will be written to:
     #   base_path/exp_name/{checkpoints, models}
     'base_path': '/persistent-tmp/',
-    'exp_name': 'flownet128x128v5',
+    'exp_name': 'flownet256x256v6',
     # Wipe any data in the provided path (destroying any previous results),
     # and start anew.
     'fresh_start': False,
@@ -67,8 +69,9 @@ y = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='y')
 # occlusions), weights are identically 1 everywhere. In these cases, for speed
 # reasons, they can be omitted.
 # w = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='w')
+is_training = tf.placeholder(tf.bool, name='is_training')
 
-flownet = FlowNet(x1, x2)
+flownet = FlowNet(x1, x2, use_batch_norm=True, is_training=is_training, l2_scale=1e-4)
 prediction = tf.identity(flownet.predictions[0], name='prediction')
 
 # Config to turn on JIT compilation
@@ -110,7 +113,7 @@ with tf.Session(config=session_config) as sess:
         t_start = time.time()
         summary, _, avg_train_loss = sess.run(
                 [merged, optimizer, loss], 
-                feed_dict={x1: x1_train, x2: x2_train, y: y_train},
+                feed_dict={x1: x1_train, x2: x2_train, y: y_train, is_training: True},
                             options=manager.run_options,
                             run_metadata=manager.run_metadata)
         t_end = time.time()
@@ -128,7 +131,7 @@ with tf.Session(config=session_config) as sess:
         if iter % config['test_batch_iter'] == 0:
             x1_test, x2_test, y_test,_ = manager.feeder_test.next_batch()
             summary, _ = sess.run([merged, loss],
-                    feed_dict={x1: x1_test, x2: x2_test, y: y_test})
+                    feed_dict={x1: x1_test, x2: x2_test, y: y_test, is_training: False})
             manager.add_test_writer_summary(summary, iter)
           
         # Add summaries for results at the three finest scales.
@@ -136,7 +139,7 @@ with tf.Session(config=session_config) as sess:
             num = 10
             y_pred_tests = sess.run(flownet.predictions[0:3],
                     feed_dict={x1: x1_test[0:num], x2: x2_test[0:num],
-                        y: y_test[0:num]})
+                        y: y_test[0:num], is_training: False})
             for y_pred_test in y_pred_tests:
                 name = 'visualization-{}x{}'.format(
                         y_pred_test.shape[1], y_pred_test.shape[2])

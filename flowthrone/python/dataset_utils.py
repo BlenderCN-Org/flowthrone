@@ -254,7 +254,9 @@ def generate_example(triplet, target_size, scale_range=[0.25, 0.75]):
 
 """ Resizes a triplet to a randomly chosen scale. """
 def generate_example_triplet_scale(triplet, target_size, scale_range=[0.25, 0.75]):
-    min_scale = target_size[0]/float(triplet[0].shape[0])
+    min_scale = max(
+            target_size[0]/float(triplet[0].shape[0]),
+            target_size[1]/float(triplet[0].shape[1]))
     # Reset the lower bound if necessary. Otherwise, we run the risk of
     # choosing a too-small scale, and not being able to pick a
     # (target_size, target_size) sized crop later.
@@ -272,8 +274,12 @@ def generate_example_triplet_shift_and_crop(triplet, target_size):
     assert target_size[0] <= rows and target_size[1] <= cols
 
     # Choose a random offset and crop.
-    y_offset = np.random.randint(0, rows - target_size[0])
-    x_offset = np.random.randint(0, cols - target_size[1])
+    y_offset = 0
+    x_offset = 0
+    if rows > target_size[0]:
+        y_offset = np.random.randint(0, rows - target_size[0])
+    if cols > target_size[1]:
+        x_offset = np.random.randint(0, cols - target_size[1])
     
     flow = triplet[0][y_offset:y_offset+target_size[0],
                       x_offset:x_offset+target_size[1],:]
