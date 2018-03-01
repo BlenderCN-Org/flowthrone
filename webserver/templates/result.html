@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-examples').addClass('link-active');
+});
+</script>
+
+<div class="container">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Identifier</th>
+        <th>AE</th>
+        <th>EE</th>
+        <th>Elapsed</th>
+      </tr>
+    </thead>
+       <tr>
+        <td>average</td>
+        <td>{{ '{:.3f}'.format(stats.average_summary.average_angular_error) }}</td>
+        <td>{{ '{:.3f}'.format(stats.average_summary.average_endpoint_error) }}</td>
+        <td>{{ '{:.3f}'.format(stats.average_summary.elapsed) }}</td>
+      </tr>  
+   
+    {% for result in stats.result %}
+      <tr>
+        <td><a href="{{ url_for('uploaded_file', filename='results/' + result_id + '/' + result.identifier + '.jpg') }}">{{ result.identifier }}</a></td>
+        <td>{{ '{:.3f}'.format(result.average_angular_error) }}</td>
+        <td>{{ '{:.3f}'.format(result.average_endpoint_error) }}</td>
+        <td>{{ '{:.3f}'.format(result.elapsed) }}</td>
+      </tr>  
+    {% endfor %}
+  </table>
+
+</div><!-- /.container -->
+
+{% endblock %}

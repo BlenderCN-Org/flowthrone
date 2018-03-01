@@ -6,11 +6,14 @@ import utils
 import os
 import config
 import json
+import flowthrone_pb2
+import google.protobuf.text_format
 
 app = Flask(__name__)
 app.secret_key = 'secret'
 app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 Markdown(app)
 
 """ Front page """
@@ -28,8 +31,8 @@ def demo():
 """ Directory listing of runs that have been done. """
 @app.route('/examples')
 def examples():
-    uuids = [d for d in os.listdir(app.config['UPLOAD_FOLDER']) \
-            if utils.result_is_valid(app.config['UPLOAD_FOLDER'], d)]
+    uuids = [d for d in os.listdir(config.EXAMPLES_FOLDER) \
+            if utils.result_is_valid(config.EXAMPLES_FOLDER, d)]
     uuids.sort()
     uuids.reverse()
     return render_template('examples.html', results=uuids)
@@ -46,7 +49,7 @@ def internal_error():
 """ View for content that's been uploaded. """
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(config.UPLOAD_FOLDER, filename)
 
 @app.route('/submit_task', methods=['POST'])
 def submit_task():
@@ -59,12 +62,30 @@ def submit_task():
         return render_template('response.html', content=error_msg, error=True) 
     
     # Task is valid, so schedule it and return the identifier.
-    task_uuid = utils.schedule_task(request, app.config['UPLOAD_FOLDER'])
+    task_uuid = utils.schedule_task(request, config.EXAMPLES_FOLDER)
     if not task_uuid:
         return internal_error()
 
     success_msg = ("Successfully uploaded files and scheduled a task '{}'.").format(task_uuid)
     return render_template('response.html', content=success_msg, error=False)
+
+
+@app.route('/results')
+def results():
+    results = [f for f in os.listdir(config.RESULTS_FOLDER) \
+        if os.path.isdir(os.path.join(config.RESULTS_FOLDER, f))]
+    results.sort()
+    return render_template('results.html', results=results)
+
+@app.route('/result/<result_id>')
+def result(result_id):
+    p = os.path.join(config.RESULTS_FOLDER, result_id)
+    result_pbtxt = [os.path.join(p, f) for f in os.listdir(p) if f.endswith('pbtxt')][0]
+    result_str = open(result_pbtxt, 'r').read()
+
+    stats = flowthrone_pb2.EvaluationOutput()
+    google.protobuf.text_format.Merge(result_str, stats)
+    return render_template('result.html', stats=stats, result_id=result_id) 
 
 """ Returns a JSON with results for a given id. """
 @app.route('/load_example/<result_id>')
@@ -77,20 +98,20 @@ def load_example(result_id):
     }
     
     result_image_filename = utils.result_image_filename_or_none(
-            app.config['UPLOAD_FOLDER'], result_id)
+            config.EXAMPLES_FOLDER, result_id)
     result_video_filename = utils.result_video_filename_or_none(
-            app.config['UPLOAD_FOLDER'], result_id)
+            config.EXAMPLES_FOLDER, result_id)
     result_stderr_filename = utils.result_stderr_filename_or_none(
-            app.config['UPLOAD_FOLDER'], result_id)
-   
+            config.EXAMPLES_FOLDER, result_id)
+
     if result_stderr_filename is not None:
         full_filename = os.path.join(
-            app.config['UPLOAD_FOLDER'], result_stderr_filename)
+            config.EXAMPLES_FOLDER, result_stderr_filename)
         result_data['stderr'] = open(full_filename).read()
     if result_image_filename is not None: 
-        result_data['result_image_filename'] = result_image_filename
+        result_data['result_image_filename'] = os.path.join('examples', result_image_filename)
     if result_video_filename is not None: 
-        result_data['result_video_filename'] = result_video_filename
+        result_data['result_video_filename'] = os.path.join('examples', result_video_filename)
 
     return json.dumps(result_data)
 

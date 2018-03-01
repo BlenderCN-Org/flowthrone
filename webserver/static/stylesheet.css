@@ -80,8 +80,10 @@ a:hover {
 .transparent {
   background-color: rgba(0,0,0,0);
 }
+
 .list-group-item {
   padding: 3px 10px;
+  border: 1px solid rgba(100, 100, 100, 0.5);
 }
 .list-group-item:hover {
   background-color: rgba(50,50,50, 0.5);
@@ -171,4 +173,9 @@ code {
 figure figcaption {
   font-size: small;
   text-align: center;
+}
+
+.table td {
+  padding: 0.25em;
+  border: none;
 }

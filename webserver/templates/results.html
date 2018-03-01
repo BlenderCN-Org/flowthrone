@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+$(document).ready(function () {
+  $('.nav-link-results').addClass('link-active');
+});
+</script>
+
+<div class="alert transparent">
+This page lists evaluation results on common datasets.<br>
+Each entry below corresponds to an evaluation with a specific model/set of parameters
+and provides both quantitative and qualitative results.
+</div>
+
+<div class="list-group">
+{% for result in results %}
+<a href="/result/{{result}}" class="list-group-item list-group-item-action transparent">{{ result }}</a>
+{% endfor %}
+</div>
+
+{% if results|length == 0: %}
+<div class="alert alert-warning transparent"> No results were uploaded. </div>
+{% endif %}
+
+{% endblock %}
