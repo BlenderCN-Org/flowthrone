@@ -4,6 +4,8 @@
 $(document).ready(function () {
   $('.nav-link-examples').addClass('link-active');
 });
+
+$(function () { $('[data-toggle="tooltip"]').tooltip() })
 </script>
 
 <div class="container">
@@ -11,25 +13,28 @@ $(document).ready(function () {
     <thead>
       <tr>
         <th>Identifier</th>
-        <th>AE</th>
-        <th>EE</th>
-        <th>Elapsed</th>
+        <th data-toggle="tooltip" data-placement="top" title="Average angular error">AE</th>
+        <th data-toggle="tooltip" data-placement="top" title="Average endpoint error">EE</th>
+        <th data-toggle="tooltip" data-placement="top" title="Elapsed time in seconds">Elapsed</th>
       </tr>
     </thead>
-       <tr>
+      <tr style="border-bottom: 1px solid white;">
         <td>average</td>
         <td>{{ '{:.3f}'.format(stats.average_summary.average_angular_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.average_summary.average_endpoint_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.average_summary.elapsed) }}</td>
       </tr> 
       {% for p in stats.percentile_summary|sort %}
+      {% if loop.index < stats.percentile_summary|length %}  
       <tr>
+      {% else %}
+      <tr style="border-bottom: 1px solid white;">
+      {% endif %}
         <td>{{p}}-th percentile</td>
         <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_angular_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_endpoint_error) }}</td>
         <td>{{ '{:.3f}'.format(stats.percentile_summary[p].elapsed) }}</td>
       </tr>
-
       {% endfor %}
 
     {% for result in stats.result %}
