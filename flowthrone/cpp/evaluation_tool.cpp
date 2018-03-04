@@ -74,7 +74,8 @@ int main(int argc, char** argv) {
   output.mutable_result()->Reserve(evaluation_config.datum_size());
   for (int i = 0; i < evaluation_config.datum_size(); ++i) {
     const auto& datum = evaluation_config.datum(i);
-    LOG(INFO) << "Running on: " << datum.identifier() << " " << i << "/" << evaluation_config.datum_size();
+    LOG(INFO) << "Running on: " << datum.identifier() << " " << i << "/"
+              << evaluation_config.datum_size();
 
     cv::Mat I0, I1, flow_gt, predicted_flow;
     LoadTriplet(datum, &I0, &I1, &flow_gt);
