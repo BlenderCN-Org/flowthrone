@@ -11,6 +11,11 @@ message OpticalFlowTensorFlowModelOptions {
   // TODO: This restriction should be lifted in the future.
   optional string export_dir = 1;
 
+  // Names of the input tensors.
+  repeated string input_tensor_name = 4;
+  // Name(s) of the output tensors.
+  repeated string output_tensor_name = 5;
+
   // Whether should perform inference in 'one-shot' -- single evaluation of the
   // network over a pair of images, of whether image should be split into a
   // collection of windows, which are then fed to the network.
