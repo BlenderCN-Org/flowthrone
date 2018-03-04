@@ -32,4 +32,10 @@ EvaluationOutput::Result ComputeAverageSummary(
     const google::protobuf::RepeatedPtrField<EvaluationOutput::Result>&
         results);
 
+// Given a collection of results for each image pair, computes several
+// percentile values.
+google::protobuf::Map<int, EvaluationOutput::Result> ComputePercentileSummary(
+    const google::protobuf::RepeatedPtrField<EvaluationOutput::Result>& results,
+    const std::vector<int>& percentiles);
+
 }  // namespace flowthrone
