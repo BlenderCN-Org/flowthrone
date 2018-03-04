@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
       // Images are saved in the same directory as the output proto.
       cv::Mat vis = VisualizeTuple(I0, I1, predicted_flow, flow_gt);
       std::string image_filename =
-          (base_output_dir / path(datum.identifier() + ".png")).string();
+          (base_output_dir / path(datum.identifier() + ".jpg")).string();
       LOG(INFO) << "Writing " << image_filename;
       cv::imwrite(image_filename, vis);
     }

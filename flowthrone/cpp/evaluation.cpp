@@ -117,7 +117,7 @@ google::protobuf::Map<int, EvaluationOutput::Result> ComputePercentileSummary(
   for (int percentile : percentiles) {
     CHECK(0 <= percentile && percentile <= 100)
         << "Percentile must be specified as an integer in {0, .., 100} range.";
-    int idx = percentile * (results.size() - 1);
+    int idx = (percentile / 100.0f) * (results.size() - 1);
     EvaluationOutput::Result summary;
     summary.set_average_angular_error(ae[idx]);
     summary.set_average_endpoint_error(ee[idx]);
