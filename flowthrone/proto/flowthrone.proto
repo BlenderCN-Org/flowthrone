@@ -60,4 +60,7 @@ message EvaluationOutput {
   repeated Result result = 1;
   // Average results.
   optional Result average_summary = 2;
+
+  // Summaries for different percentiles, computed across image pairs.
+  map<int32, Result> percentile_summary = 3;
 }
