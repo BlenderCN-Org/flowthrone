@@ -2,27 +2,66 @@
 {% block content %}
 <script>
 $(document).ready(function () {
-  $('.nav-link-examples').addClass('link-active');
+  $('.nav-link-results').addClass('link-active');
 });
 
 $(function () { $('[data-toggle="tooltip"]').tooltip() })
 </script>
 
-<div class="container">
+{% macro pretty_float(x) -%}
+  {% if x|abs > 0 %}
+  {{ '{:.3f}'.format(x) }}
+  {% else %}
+  {{ 'n/a' }}
+  {% endif %}
+{%- endmacro %}
+
+
+{% macro make_row(result, row_name, href='') -%}
+   {% if href == '': %}
+   <td class="id right-sep"> {{row_name}} </td>
+   {% else %}
+   <td class="id right-sep"><a href="{{href}}">{{row_name}}</a></td>
+   {% endif %}
+   <td class="ae">{{ pretty_float(result.average_angular_error) }}</td>
+   <!-- interval ranges for angular errors -->  
+   {% for p in result.angular_error_in_interval %}
+   <td class="ae-details">{{ pretty_float(p.value) }}</td>
+   {% endfor %}
+   <!-- -->
+   <td class="ee left-sep">{{ pretty_float(result.average_endpoint_error) }}</td>
+   <!-- interval ranges for endpoint errors -->  
+   {% for p in result.endpoint_error_in_interval %}
+   <td class="ee-details">{{ pretty_float(p.value) }}</td>
+   {% endfor %}
+   <!-- -->
+   <td class="elapsed left-sep">{{ pretty_float(result.elapsed) }}</td>
+{%- endmacro %}
+
+<div class="container container-wide">
   <table class="table table-striped">
     <thead>
       <tr>
-        <th>Identifier</th>
-        <th data-toggle="tooltip" data-placement="top" title="Average angular error">AE</th>
-        <th data-toggle="tooltip" data-placement="top" title="Average endpoint error">EE</th>
-        <th data-toggle="tooltip" data-placement="top" title="Elapsed time in seconds">Elapsed</th>
+        <th class="id right-sep">Identifier</th>
+        <th class="ae" data-toggle="tooltip" data-placement="top" title="Average angular error">AE</th>
+        <!-- interval-ranges for angular errors -->
+        {% for p in stats.average_summary.angular_error_in_interval %}
+        <th class="ae-details" data-toggle="tooltip" data-placement="top" title="Average angular error in regions with flow magnitude in range {{p.interval.lo}} - {{p.interval.hi}}">
+          AE<br><tiny>{{'{:g}'.format(p.interval.lo)}}-{{'{:g}'.format(p.interval.hi)}}</tiny></th>
+        {% endfor %}
+        <!-- -->
+        <th class="ee left-sep" data-toggle="tooltip" data-placement="top" title="Average endpoint error">EE</th>
+        <!-- interval-ranges for endpoint errors -->
+        {% for p in stats.average_summary.endpoint_error_in_interval %}
+        <th class="ee-details" data-toggle="tooltip" data-placement="top" title="Average endpoint error in regions with flow magnitude in range {{p.interval.lo}} - {{p.interval.hi}}">
+          EE<br><tiny>{{'{:g}'.format(p.interval.lo)}}-{{'{:g}'.format(p.interval.hi)}}</tiny></th>
+        {% endfor %}
+        <!-- -->
+        <th class="elapsed left-sep" data-toggle="tooltip" data-placement="top" title="Elapsed time in seconds">Elapsed</th>
       </tr>
     </thead>
       <tr style="border-bottom: 1px solid white;">
-        <td>average</td>
-        <td>{{ '{:.3f}'.format(stats.average_summary.average_angular_error) }}</td>
-        <td>{{ '{:.3f}'.format(stats.average_summary.average_endpoint_error) }}</td>
-        <td>{{ '{:.3f}'.format(stats.average_summary.elapsed) }}</td>
+        {{ make_row(stats.average_summary, 'average') }}
       </tr> 
       {% for p in stats.percentile_summary|sort %}
       {% if loop.index < stats.percentile_summary|length %}  
@@ -30,19 +69,12 @@ $(function () { $('[data-toggle="tooltip"]').tooltip() })
       {% else %}
       <tr style="border-bottom: 1px solid white;">
       {% endif %}
-        <td>{{p}}-th percentile</td>
-        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_angular_error) }}</td>
-        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].average_endpoint_error) }}</td>
-        <td>{{ '{:.3f}'.format(stats.percentile_summary[p].elapsed) }}</td>
-      </tr>
+      {{ make_row(stats.percentile_summary[p], '{}-th percentile'.format(p)) }}
       {% endfor %}
 
     {% for result in stats.result %}
       <tr>
-        <td><a href="{{ url_for('uploaded_file', filename='results/' + result_id + '/' + result.identifier + '.jpg') }}">{{ result.identifier }}</a></td>
-        <td>{{ '{:.3f}'.format(result.average_angular_error) }}</td>
-        <td>{{ '{:.3f}'.format(result.average_endpoint_error) }}</td>
-        <td>{{ '{:.3f}'.format(result.elapsed) }}</td>
+        {{ make_row(result, result.identifier, url_for('uploaded_file', filename='results/' + result_id + '/' + result.identifier + '.jpg')) }}
       </tr>  
     {% endfor %}
   </table>

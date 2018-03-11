@@ -58,4 +58,54 @@ TEST(NansAreIgnored, Works) {
   ASSERT_NEAR(0.0f, FlowAngularError(uv, uv_gt), 1e-4);
 }
 
+namespace {
+
+Interval CreateInterval(float a, float b) {
+  Interval interval;
+  interval.set_lo(a);
+  interval.set_hi(b);
+  return interval;
+}
+
+}  // namespace
+
+TEST(AverageErrorByInterval, Works) {
+  //  [ 5 5 5 5 5 ]   <-- optical flow norm
+  //  [ 0 0 0 0 0 ]
+  //
+  //  [ 2 2 2 2 2 ]   <-- error image
+  //  [ 1 1 1 1 1 ]
+  using google::protobuf::RepeatedPtrField;
+  using google::protobuf::RepeatedField;
+
+  cv::Rect top_rows(0, 0, 20, 5);
+  cv::Mat uv(10, 20, CV_32FC2, cv::Scalar(0));
+  uv(top_rows).setTo(cv::Vec2f(3.0, 4.0f));
+  cv::Mat error(10, 20, CV_32FC1, cv::Scalar(1.0f));
+  error(top_rows).setTo(cv::Scalar(2.0f));
+
+  // Verify that when interval is [0, infty), then the average is returned.
+  RepeatedPtrField<Interval> intervals;
+  *intervals.Add() = CreateInterval(0, 1e9);
+  *intervals.Add() = CreateInterval(0, 1);
+  *intervals.Add() = CreateInterval(0, 5);  // <-- should be same as above,
+                                            //     (the interval is half open).
+  *intervals.Add() = CreateInterval(5, 6);
+  *intervals.Add() = CreateInterval(10, 11);
+
+  auto errors = AverageErrorByInterval(uv, error, intervals);
+  ASSERT_EQ(intervals.size(), errors.size());
+
+  float average_error = cv::sum(error)[0] / error.total();
+  EXPECT_EQ(average_error, errors[0])
+      << "Should have computed average over the entire 'error' image.";
+  EXPECT_EQ(1.0f, errors[1]) << "Incorrect average, on interval [0, 1)";
+  EXPECT_EQ(1.0f, errors[2]) << "Incorrect average, on interval [0, 5)";
+  EXPECT_EQ(2.0f, errors[3]) << "Incorrect average, on interval [5, 6)";
+
+  EXPECT_TRUE(std::isnan(errors[4]))
+      << "Nothing fell into the interval [10, 11), and the convention is to "
+         "return 'NaN' in this situation.";
+}
+
 }  // namespace flowthrone

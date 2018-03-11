@@ -66,11 +66,15 @@ int main(int argc, char** argv) {
 
   EvaluationInput evaluation_config;
   ParseProtoFromFile(FLAGS_eval_input, &evaluation_config);
-
+  if (!evaluation_config.has_options()) {
+    LOG(INFO)
+        << "Evaluation options were not specified in the configuration, so "
+           "we will use the default ones. ";
+    *evaluation_config.mutable_options() = GetDefaultEvaluationOptions();
+  }
   std::unique_ptr<OpticalFlowModel> solver =
       OpticalFlowModel::Create(FLAGS_options);
 
-  const std::vector<int> kPercentiles{10, 25, 50, 75, 90};
   EvaluationOutput output;
   output.mutable_result()->Reserve(evaluation_config.datum_size());
   for (int i = 0; i < evaluation_config.datum_size(); ++i) {
@@ -98,11 +102,9 @@ int main(int argc, char** argv) {
     }
 
     // Perform evaluation.
-    EvaluationOutput::Result result;
+    EvaluationOutput::Result result =
+        Evaluate(predicted_flow, flow_gt, evaluation_config.options());
     result.set_identifier(datum.identifier());
-    result.set_average_angular_error(FlowAngularError(predicted_flow, flow_gt));
-    result.set_average_endpoint_error(
-        FlowEndpointError(predicted_flow, flow_gt));
     result.set_elapsed(elapsed);
     *output.add_result() = result;
 
@@ -110,8 +112,8 @@ int main(int argc, char** argv) {
     // Some flow evaluations may take a REALLY LONG TIME, so it's nicer to
     // write this small proto regularly, rather than waiting until the end.
     *output.mutable_average_summary() = ComputeAverageSummary(output.result());
-    *output.mutable_percentile_summary() =
-        ComputePercentileSummary(output.result(), kPercentiles);
+    *output.mutable_percentile_summary() = ComputePercentileSummary(
+        output.result(), evaluation_config.options().summary_percentile());
 
     WriteProtoToFile(FLAGS_eval_output, output);
     VLOG(1) << "Processed " << output.result_size() << " results. Updated "

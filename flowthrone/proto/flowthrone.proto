@@ -6,9 +6,6 @@ option cc_enable_arenas = true;
 // Set of parameters for OpticalFlowTensorFlowModel class.
 message OpticalFlowTensorFlowModelOptions {
   // Path to the directory containing tensorflow SavedModelBundle.
-  // The model should have two inputs named "x1" and "x2" and an output named
-  // "prediction".
-  // TODO: This restriction should be lifted in the future.
   optional string export_dir = 1;
 
   // Names of the input tensors.
@@ -29,10 +26,10 @@ message OpticalFlowTensorFlowModelOptions {
   optional double window_stride = 3 [default = 1.0];
 };
 
-
 // Message for specifying a collection of image pair / groundtruth triplets,
 // to be used for evaluation.
 message EvaluationInput {
+  // Message for specifying a single image pair / groundtruth example.
   message Datum {
     // Path to the first and second image on which flow should be computed.
     optional string image0_filename = 1;
@@ -42,7 +39,22 @@ message EvaluationInput {
     // Identifier (e.g. sequence/image name).
     optional string identifier = 4;
   }
-  repeated Datum datum = 1;
+  // Options for performing the evaluation.
+  message Options {
+    // Statistics over individual pairs' results are aggregated over these
+    // percentiles. This gives some insight into median / worst-case results.
+    repeated int32 summary_percentile = 1;
+    // Set of velocity intervals over which errors should be averaged.
+    // This can help provide insight into optical flow performance when the
+    // displacements are very small, large, etc.
+    // This breakdown is also used in Sintel evaluation suite.
+    repeated Interval displacement_interval = 2;
+  }
+
+  optional Options options = 1;
+
+  // List of pairs that evaluation should run on.
+  repeated Datum datum = 2;
 }
 
 // Message for storing evaluation results.
@@ -51,11 +63,16 @@ message EvaluationOutput {
   message Result {
     optional float average_angular_error = 1;
     optional float average_endpoint_error = 2;
+
+    repeated IntervalValue endpoint_error_in_interval = 5;
+    repeated IntervalValue angular_error_in_interval = 6;
+
     // Time it took to compute the result in seconds.
     optional float elapsed = 4;
     // Name of the image pair.
     optional string identifier = 3;
   }
+
   // Per-image pair result.
   repeated Result result = 1;
   // Average results.
@@ -63,4 +80,20 @@ message EvaluationOutput {
 
   // Summaries for different percentiles, computed across image pairs.
   map<int32, Result> percentile_summary = 3;
+}
+
+// ----------------------------------------------------------------------------
+//                              Various utility classes.
+// ----------------------------------------------------------------------------
+
+message Interval {
+  optional float lo = 1;
+  optional float hi = 2;
+}
+
+// Representation of a value associated with an interval, meant to be
+// analogous to std::pair<Interval, float>
+message IntervalValue {
+  optional Interval interval = 1;
+  optional float value = 2;
 }

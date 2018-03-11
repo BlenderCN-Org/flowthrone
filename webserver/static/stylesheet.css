@@ -41,6 +41,9 @@ a:hover {
   .container {
     max-width: 46rem;
   }
+  .container-wide {
+    max-width: 60em;
+  }
 }
 .container-narrow > hr {
   margin: 2rem 0;
@@ -178,4 +181,44 @@ figure figcaption {
 .table td {
   padding: 0.25em;
   border: none;
+}
+.table .left-sep {
+  border-left: 1px solid rgba(128, 128, 128, 0.25);
+}
+.table .right-sep {
+  border-right: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+.table .id {
+
+}
+.table .ae {
+  color: #787777;
+  font-weight: 500;
+  text-align: center;
+}
+.table .ae-details {
+  color: #787777;
+  font-weight: 400;
+  text-align: center;
+}
+
+.table .ee {
+  color: #677777;
+  font-weight: 500;
+  text-align: center;
+}
+.table .ee-details {
+  color: #677777;
+  font-weight: 400;
+  text-align: center;
+}
+
+.table .elapsed {
+  color: #7c8888;  
+  text-align: center;
+}
+
+tiny {
+  font-size: smaller;
 }
