@@ -62,15 +62,17 @@ function load_result(result_id) {
 
 </script>
 
-{% if results|length == 0 %}
-<div class="alert alert-warning transparent">
-  Could not find any uploaded examples.
-  Perhaps try visiting the <a href="/results">results</a> page? 
-</div>
-{% endif %}
-
-</div>
 <div class="container">
+
+  {% if results|length == 0 %}
+  <div class="alert alert-warning transparent">
+    Could not find any uploaded examples.
+    Perhaps try visiting the <a href="/results">results</a> page? 
+  </div>
+  {% endif %}
+
+
+  
   <div class="container" id="result-visualization" style="display:none">
     <span class="result-heading" >Result id:</span>
     <span class="result-text" id="result-id"></span>
