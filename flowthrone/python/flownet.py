@@ -3,7 +3,22 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
-from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error
+from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error, l2_warp_error
+import warnings
+
+
+""" Configuration for instantiating/training FlowNet network. """
+class FlowNetConfig:
+    # Weights applied to different layers (from high res to low res).
+    loss_weights  = [0.25, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0]
+    # Weight applied to angular loss.
+    angular_loss_weight = 5.0
+    # L2 regularization on the filters.
+    l2_scale = 1e-2
+    # Whether the network should normalize images to be in [-1, 1].
+    normalize_input = True
+    # Whether batch norm should be used or not.
+    use_batch_norm = False
 
 
 """ Class that instantiates a tensorflow net for computing optical flow,
@@ -20,9 +35,17 @@ from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error
 
     If you are training the model, you should additionally do:
     
-    >>> loss = flownet.set_loss(groundtruth, weights)
+    >>> flownet.set_angular_error_loss(groundtruth, weights)
+    >>> flownet.set_endpoint_error_loss(groundtruth, weights)
+    >>> flownet.set_brightness_constancy_violation_loss(weights)
+    >>> loss = flownet.get_loss()
 
     and use the returned loss in the tf session.run call.
+    If it not necessary to use all losses (you may avoid using angular loss,
+    or BCC violation loss, for example).
+
+    Note that some losses require supervision (i.e. groundtruth flow), and 
+    some do not (e.g. BCC constraint violation).
 """
 class FlowNet:
     # Prediction layers. 
@@ -32,9 +55,14 @@ class FlowNet:
     endpoint_loss = []
     # Angular losses for different layers.
     angular_loss = []
+    # Warping error.
+    brightness_constancy_error_loss = []
+
     # Total loss used in training.
     total_loss = None
 
+    x1 = None
+    x2 = None
 
     # 0: 128x128, 1: 64x64, 2: 32x32, 3: 16x16, 4: 14x14, 5: 12x12, 6: 10x10
     conv = [[]]*7
@@ -43,37 +71,34 @@ class FlowNet:
     
     # Intermediate outputs.
     predict = [[]]*8
-    loss_weights  = [0.25, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0]
-    angular_loss_weight = 5.0
-    l2_scale = 1e-2
+    
     is_training = None
-    use_batch_norm = False
+    config = None
 
-    def __init__(self, x1, x2, use_batch_norm = False,
-                 is_training = None, l2_scale=1e-2, normalize=True):
+    def __init__(self, x1, x2, is_training = None, config=FlowNetConfig()):
         from tensorflow.contrib.layers import conv2d
         from tensorflow.contrib.layers import conv2d_transpose
         from tensorflow.contrib.layers import max_pool2d
         from tensorflow.contrib.layers import fully_connected
         from tensorflow.contrib.layers import l2_regularizer
         from tensorflow.contrib.layers import batch_norm
-        # Should think hwo to generalize this a little bit, as it's getting
+        # Should think how to generalize this a little bit, as it's getting
         # ridiculous otherwise.
         if not x1.shape[1] == 256 or not x1.shape[2] == 256 or \
            not x2.shape[1] == 256 or not x2.shape[2] == 256:
             raise Exception('Input dimensions must be 256x256')
         
-        self.l2_scale = l2_scale
+        self.config = config
+        self.config.use_batch_norm = is_training is not None
         self.is_training = is_training
-        self.use_batch_norm = use_batch_norm
 
-        x1 = tf.cast(x1, dtype='float32')
-        x2 = tf.cast(x2, dtype='float32')
-        if normalize:
-            x1 = (x1 - 128.0)/128.0
-            x2 = (x2 - 128.0)/128.0
+        self.x1 = tf.cast(x1, dtype='float32')
+        self.x2 = tf.cast(x2, dtype='float32')
+        if self.config.normalize_input:
+            self.x1 = (self.x1 - 128.0)/128.0
+            self.x2 = (self.x2 - 128.0)/128.0
 
-        x_concat = tf.concat([x1, x2], axis=3)
+        x_concat = tf.concat([self.x1, self.x2], axis=3)
 
         # NOTE: These do not follow the scales used in the paper.
         conv_outputs = [64, 64, 64, 64, 128, 256, 512, 512]
@@ -124,7 +149,7 @@ class FlowNet:
         index = 7
         self.predict[index] = conv2d(self.conv[index-1],
                             num_outputs=2, kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
  
         # --------------------------- 10x10 -> 12x12 --------------------------
@@ -138,7 +163,7 @@ class FlowNet:
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(concat,
                             num_outputs=2, kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -149,7 +174,7 @@ class FlowNet:
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(concat,
                             num_outputs=2, kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -160,7 +185,7 @@ class FlowNet:
         self.predict[index] = conv2d(concat,
                             num_outputs=2,
                             kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -172,7 +197,7 @@ class FlowNet:
         self.predict[index] = conv2d(concat,
                             num_outputs=2,
                             kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -184,7 +209,7 @@ class FlowNet:
         self.predict[index] = conv2d(concat,
                             num_outputs=2,
                             kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -196,7 +221,7 @@ class FlowNet:
         self.predict[index] = conv2d(concat,
                             num_outputs=2,
                             kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
         self.deconv[index-1] = self._add_con2d_transpose_relu(
                 concat, num_outputs=deconv_outputs[index-1],
@@ -207,7 +232,7 @@ class FlowNet:
         self.predict[0] = conv2d(concat,
                             num_outputs=2,
                             kernel_size=3, stride=1, padding='SAME',
-                            weights_regularizer=l2_regularizer(l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
  
         # Add named identity layers.
@@ -225,9 +250,9 @@ class FlowNet:
         out = conv2d(layer,
                      num_outputs=num_outputs,
                      kernel_size=kernel_size, stride=stride, padding=padding,
-                     weights_regularizer=l2_regularizer(self.l2_scale),
+                     weights_regularizer=l2_regularizer(self.config.l2_scale),
                      activation_fn=None)
-        return self.add_batch_norm_or_relu(out, self.use_batch_norm, self.is_training)
+        return self._add_batch_norm_or_relu(out, self.config.use_batch_norm, self.is_training)
 
     """ Adds and returns conv2d_transpose and relu/batch norm """
     def _add_con2d_transpose_relu(self, layer, num_outputs, kernel_size, stride, padding):
@@ -236,14 +261,14 @@ class FlowNet:
         out = conv2d_transpose(layer,
                             num_outputs=num_outputs,
                             kernel_size=kernel_size, stride=stride, padding=padding,
-                            weights_regularizer=l2_regularizer(self.l2_scale),
+                            weights_regularizer=l2_regularizer(self.config.l2_scale),
                             activation_fn=None)
-        return self.add_batch_norm_or_relu(out, self.use_batch_norm, self.is_training)
+        return self._add_batch_norm_or_relu(out, self.config.use_batch_norm, self.is_training)
  
 
 
     """ Adds and returns a batch norm layer, or returns a ReLU layer. """
-    def add_batch_norm_or_relu(self, layer, use_batch_norm=False, is_training=None):
+    def _add_batch_norm_or_relu(self, layer, use_batch_norm=False, is_training=None):
         kEpsilon = 1e-2
         kDecay = 0.9999
         from tensorflow.contrib.layers import batch_norm
@@ -258,31 +283,56 @@ class FlowNet:
         else:
             return tf.nn.relu(layer)
 
-
-    """ Sets and returns loss for training. """
-    def set_loss(self, groundtruth, weights=None):
-        # Add endpoint losses.
+    """ Sets endpoint error loss. This function can be called only once. """
+    def set_endpoint_error_loss(self, groundtruth, weights=None):
+        assert len(self.endpoint_loss) == 0, "Endpoint loss is already set?"
         for i, prediction in enumerate(self.predict):
             loss_name = 'endpoint_loss-{}x{}'.format(
                     prediction.shape[1], prediction.shape[2])
+            loss_weight = self.config.loss_weights[i]
             loss = FlowNet.get_endpoint_loss_at_scale(\
-                    prediction, groundtruth, weights) * FlowNet.loss_weights[i]
+                    prediction, groundtruth, weights) * loss_weight
             tf.summary.scalar(loss_name, loss)
             self.endpoint_loss.append(loss)
-        
-        # Add angular losses.
+        return self.get_loss()
+
+    """ Sets angular error loss. This function can be called only once. """
+    def set_angular_error_loss(self, groundtruth, weights=None):
+        assert len(self.angular_loss) == 0, "Angular loss is already set?"
         for i, prediction in enumerate(self.predict):
             loss_name = 'angular_loss-{}x{}'.format(
                     prediction.shape[1], prediction.shape[2])
+            loss_weight = self.config.loss_weights[i] * self.config.angular_loss_weight
             loss = FlowNet.get_angular_loss_at_scale(\
-                    self.predict[i], groundtruth, weights) * FlowNet.loss_weights[i] * FlowNet.angular_loss_weight
+                    self.predict[i], groundtruth, weights) * loss_weight
             tf.summary.scalar(loss_name, loss)
             self.angular_loss.append(loss)
+        return self.get_loss()
 
-        self.total_loss = sum(self.angular_loss) + sum(self.endpoint_loss) 
+    """ Sets brightness-constancy-constraint violation loss.
+        This function can be called only once. """
+    def set_brightness_constancy_violation_loss(self, weights=None):
+        warnings.warn("This feature is experimental", Warning)
+
+        kWarpLossScale = 50
+        loss_name = 'interpolation_loss-{}x{}'.format(
+                     self.predict[0].shape[1], self.predict[0].shape[2])
+        loss = tf.reduce_mean(l2_warp_error(
+            self.x1, self.x2, self.predict[0], weights)) * kWarpLossScale
+        self.brightness_constancy_error_loss.append(loss)
+        tf.summary.scalar(loss_name, loss)
+        return self.get_loss()
+
+
+    """ Returns loss used for training. """
+    def get_loss(self):
+        self.total_loss = \
+                sum(self.angular_loss) + \
+                sum(self.endpoint_loss) + \
+                sum(self.brightness_constancy_error_loss)
         tf.summary.scalar('total_loss', self.total_loss)
-
         return self.total_loss
+
 
     """ Utility function for building the network.
         Concatenates three inputs: convolution output, deconvolution output,
@@ -337,24 +387,3 @@ class FlowNet:
                     groundtruth_scaled, prediction, weights_scaled))
         else:
             return tf.reduce_mean(angular_flow_error(groundtruth, prediction, weights))
-
-    """ Returns the angular loss. """
-    @staticmethod
-    def get_angular_loss(prediction, groundtruth, weights):
-        raise NotImplementedError
-
-
-    """ Calculates endpoint loss at multiple scales.
-        'groundtruth' and 'weights' are provided at the original scale, while 
-        'predictions' is a list of predictions at various scales.
-    """
-    @staticmethod
-    def get_endpoint_loss(predictions, groundtruth, weights):
-        # Sort predictions so that smaller scales appear first.
-        predictions.sort(key=lambda x : x.shape.as_list()[1]*x.shape.as_list()[2])
-        losses = [FlowNet.endpoint_loss_at_scale(
-            prediction, groundtruth, weights) for prediction in predictions]
-        loss = 0
-        for weight, loss in zip(FlowNet.loss_weights, losses):
-            loss += weight * loss
-        return loss

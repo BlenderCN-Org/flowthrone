@@ -47,4 +47,114 @@ def endpoint_flow_error(prediction, groundtruth, weights=None):
     else:
         return (prediction - groundtruth)**2
 
+""" Computes residual for a given optical flow: I0(x) - I1(w(x)) """
+def compute_residual(images0, images1, uv):
+    assert images0.dtype == images1.dtype
+    return images0 - warp_with_flow(images1, uv)
+
+""" Returns L2 squared 'interpolation error' """
+def l2_warp_error(images0, images1, uv, weights=None):
+    if weights is not None:
+        return weights * compute_residual(images0, images1, uv)**2
+    else:
+        return compute_residual(images0, images1, uv)**2
+
+
+""" Warps a batch of images (a 4D tensor) by the provided optical flow. """
+def warp_with_flow(images, uv):
+    assert images.dtype == uv.dtype
+    assert len(images.shape) == 4, "Tensor must have four dimensions!"
+    assert len(uv.shape) == 4, "Tensor must have four dimensions!"
+    assert uv.shape[3] == 2, "Flow field must have two channels!"
+
+    height = images.shape[1]
+    width = images.shape[2]
+    flow = _get_flow_grid(uv)
+    x = flow[:,:,:,0]
+    y = flow[:,:,:,1]
+
+    x0, y0, x1, y1 = _get_query_points(x, y)
+
+    ## Get pixel value at corner coords
+    Ia = _get_pixel_values(images, x0, y0)
+    Ib = _get_pixel_values(images, x0, y1)
+    Ic = _get_pixel_values(images, x1, y0)
+    Id = _get_pixel_values(images, x1, y1)
+
+    ## Recast as float for delta calculation.
+    x0 = tf.cast(x0, images.dtype)
+    x1 = tf.cast(x1, images.dtype)
+    y0 = tf.cast(y0, images.dtype)
+    y1 = tf.cast(y1, images.dtype)
+
+    # Calculate weights.
+    wa = (x1 - x) * (y1 - y)
+    wb = (x1 - x) * (y - y0)
+    wc = (x - x0) * (y1 - y)
+    wd = (x - x0) * (y - y0)
+
+    # Add dimension for addition.
+    wa = tf.expand_dims(wa, axis=3)
+    wb = tf.expand_dims(wb, axis=3)
+    wc = tf.expand_dims(wc, axis=3)
+    wd = tf.expand_dims(wd, axis=3)
+    
+    return tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
+
+""" Returns a 4D tensor representing with values out(x) = x + uv(x) 
+    USERS SHOULD NOT BE CALLING THIS FUNCTION.
+"""
+def _get_flow_grid(uv):
+    assert len(uv.shape) == 4, "Tensor must have four dimensions!"
+    assert uv.shape[3] == 2, "Flow field must have two channels!"
+    height = uv.shape[1]
+    width = uv.shape[2]
+
+    xx, yy = tf.meshgrid(tf.range(width), tf.range(height))
+    xx = tf.expand_dims(tf.expand_dims(xx, 0), 3)
+    yy = tf.expand_dims(tf.expand_dims(yy, 0), 3)
+    n = tf.shape(uv)[0]
+    xx = tf.tile(xx, [n, 1, 1, 1])
+    yy = tf.tile(yy, [n, 1, 1, 1])
+    xx = tf.cast(xx, tf.float32)
+    yy = tf.cast(yy, tf.float32)
+    grid = tf.concat([xx, yy], axis = 3)
+    return grid + uv
+
+""" Clips points to be within image boundaries.
+    USERS SHOULD NOT BE CALLING THIS FUNCTION. """
+def _clip_values(x, y):
+    assert x.shape[1] == y.shape[1]
+    assert x.shape[2] == y.shape[2]
+    assert x.dtype == y.dtype
+    dtype = x.dtype
+    max_y = tf.cast(x.shape[1] - 1, dtype)
+    max_x = tf.cast(x.shape[2] - 1, dtype)
+    zero = tf.zeros([], dtype=dtype)
+    return tf.clip_by_value(x, zero, max_x), tf.clip_by_value(y, zero, max_y)
+
+""" Returns a 4D tensor with points sampled at the given locations. 
+    USERS SHOULD BE CALLING THIS FUNCTION DIRECTLY. """
+def _get_pixel_values(images, xx, yy):
+    assert xx.shape[1] == yy.shape[1]
+    assert xx.shape[2] == yy.shape[2]
+    # Points outside of image boundaries are truncated to the boundary pixels.
+    n = tf.shape(xx)[0]
+    xx_clipped, yy_clipped = _clip_values(xx, yy)
+    batch_idx = tf.range(0, n)
+    batch_idx = tf.reshape(batch_idx, [n, 1, 1])
+    b = tf.tile(batch_idx, [1, xx.shape[1], xx.shape[2]])
+    indices = tf.stack(
+            [b, tf.cast(yy_clipped, tf.int32), tf.cast(xx_clipped, tf.int32)], axis=3)
+    return tf.gather_nd(images, indices)
+
+def _get_lower_upper_neighbors(x):
+    x0 = tf.cast(x, tf.int32)
+    x1 = x0 + 1
+    return x0, x1
+
+def _get_query_points(x, y):
+    x0, x1 = _get_lower_upper_neighbors(x)
+    y0, y1 = _get_lower_upper_neighbors(y)
+    return x0, y0, x1, y1
 

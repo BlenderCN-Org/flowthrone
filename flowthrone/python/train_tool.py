@@ -11,7 +11,7 @@ import numpy as np
 import shutil
 import time
 from tf_utils import resample_flow, angular_flow_error
-from flownet import FlowNet
+from flownet import FlowNet, FlowNetConfig
 from training_manager import TrainingManager, \
         get_visualization_summary, variable_summary
 
@@ -20,7 +20,7 @@ DATASET_PATH = os.path.join(os.environ['HOME'], 'data', 'flying_chairs_256x256')
 config = {
     # How many examples to hold in memory
     'num_train': 5000,
-    'num_test': 1000,
+    'num_test': 100,
     # How often to reload dataset. If your dataset is small, or if you have
     # a lot of memory, you can set this to zero (or a very large number), and
     # never do it. But if you cannot fit the entire dataset into memory, this
@@ -69,9 +69,9 @@ y = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='y')
 # occlusions), weights are identically 1 everywhere. In these cases, for speed
 # reasons, they can be omitted.
 # w = tf.placeholder(tf.float32, [None, imsize, imsize, 2], name='w')
+flownet_config = FlowNetConfig()
 is_training = tf.placeholder(tf.bool, name='is_training')
-
-flownet = FlowNet(x1, x2, use_batch_norm=True, is_training=is_training, l2_scale=1e-4)
+flownet = FlowNet(x1, x2, is_training=is_training, config=flownet_config)
 prediction = tf.identity(flownet.predictions[0], name='prediction')
 
 # Config to turn on JIT compilation
@@ -80,7 +80,11 @@ session_config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOp
 
 with tf.Session(config=session_config) as sess:
     # Setup loss for training and the optimizer.
-    loss = flownet.set_loss(y)
+    flownet.set_endpoint_error_loss(y)
+    flownet.set_angular_error_loss(y)
+    flownet.set_brightness_constancy_violation_loss()
+    loss = flownet.get_loss()
+
     optimizer = manager.get_optimizer(loss)
     tf_iteration = tf.Variable(0, name='iteration_counter')
 
