@@ -62,22 +62,24 @@ target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 ##  |______||_____||____/ |_|  \_\/_/    \_\|_|  \_\|_____||______||_____/   ##
 ##                                                                           ##
 ###############################################################################
-# This is the main library that the binaries should be link.
+# This is the main library that the binaries should link.
 add_library(flowthrone STATIC
-  flowthrone/cpp/optical_flow_model.h
-  flowthrone/cpp/optical_flow_model.cpp
-  flowthrone/cpp/optical_flow_tf_model.cpp
-  flowthrone/cpp/optical_flow_tf_model.h
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
-  flowthrone/cpp/visualization.cpp
-  flowthrone/cpp/visualization.h
-  flowthrone/cpp/utils.cpp
-  flowthrone/cpp/utils.h
-  flowthrone/cpp/tf_utils.cpp
-  flowthrone/cpp/tf_utils.h
+  flowthrone/cpp/optical_flow_model.cpp
+  flowthrone/cpp/optical_flow_model.h
+  flowthrone/cpp/optical_flow_tf_model.cpp
+  flowthrone/cpp/optical_flow_tf_model.h
+  flowthrone/cpp/point_sequence.cpp
+  flowthrone/cpp/point_sequence.h
   flowthrone/cpp/signal_handling.cpp
   flowthrone/cpp/signal_handling.h
+  flowthrone/cpp/tf_utils.cpp
+  flowthrone/cpp/tf_utils.h
+  flowthrone/cpp/utils.cpp
+  flowthrone/cpp/utils.h
+  flowthrone/cpp/visualization.cpp
+  flowthrone/cpp/visualization.h
 )
 
 target_link_libraries(flowthrone
