@@ -207,4 +207,63 @@ std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
   return output;
 };
 
+cv::Mat ComputeFlowDivergence(const cv::Mat& flow) {
+  CHECK_EQ(CV_32FC2, flow.type());
+
+  std::vector<cv::Mat> flow_split;
+  cv::split(flow, flow_split);
+
+  cv::Mat w_x_dx, w_y_dy;
+  cv::Mat kx = (cv::Mat_<float>(1, 3) << -0.5, 0, 0.5);
+  cv::Mat ky = (cv::Mat_<float>(3, 1) << -0.5, 0, 0.5);
+  cv::filter2D(flow_split[0], w_x_dx, -1, kx);
+  cv::filter2D(flow_split[1], w_y_dy, -1, ky);
+  CHECK_EQ(CV_32FC1, w_x_dx.type());
+  return w_x_dx + w_y_dy;
+}
+
+cv::Mat ProbabilityOfOcclusion(const cv::Mat& I0, const cv::Mat& I1,
+                               const cv::Mat& flow, float sigma_d,
+                               float sigma_i) {
+  cv::Mat flow_div = ComputeFlowDivergence(flow);
+  cv::min(flow_div, cv::Scalar(0.0f), flow_div);
+
+  // Compute brightness constancy violation.
+  cv::Mat I_dt = WarpWithFlow(I1, flow) - I0;  // I1_warped - I0
+  CHECK_EQ(I_dt.type(), CV_32FC1) << "Passed images must be of type CV_32FC1";
+
+  constexpr int kNumExpPoints = 250;
+  constexpr float kExpMaxValue = 10.0;
+  std::vector<float> exp_cache =
+      GetExponentialVector(kExpMaxValue, kNumExpPoints);
+  auto exp_index = [kExpMaxValue, kNumExpPoints](float val) {
+    return std::min(kNumExpPoints - 1,
+                    static_cast<int>(std::min<float>(kExpMaxValue, val) *
+                                     (kNumExpPoints / kExpMaxValue)));
+  };
+  cv::Mat p_occ(I0.rows, I0.cols, CV_32FC1);
+  const float* I_dt_data = reinterpret_cast<const float*>(I_dt.data);
+  const float* flow_div_data = reinterpret_cast<const float*>(flow_div.data);
+  float* p_occ_data = reinterpret_cast<float*>(p_occ.data);
+
+  const float sigma_i_inv = 1.0f / sigma_i;
+  const float sigma_d_inv = 1.0f / sigma_d;
+  for (size_t i = 0; i < p_occ.total(); ++i) {
+    float argexp1 = 0.5 * I_dt_data[i] * sigma_i_inv;
+    float argexp2 = 0.5 * flow_div_data[i] * sigma_d_inv;
+    float argexp_total = argexp1 * argexp1 + argexp2 * argexp2;
+    p_occ_data[i] = 1.0f - exp_cache[exp_index(argexp_total)];
+  }
+  return p_occ;
+}
+
+std::vector<float> GetExponentialVector(float max_value, int num_points) {
+  CHECK(max_value > 0);
+  std::vector<float> exps(num_points);
+  for (int i = 0; i < num_points; ++i) {
+    exps[i] = exp(-i * max_value / num_points);
+  }
+  return exps;
+}
+
 }  // namespace flowthrone

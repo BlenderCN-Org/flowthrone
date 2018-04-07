@@ -1,6 +1,6 @@
 #include "utils.h"
-#include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <gtest/gtest.h>
 
 namespace flowthrone {
 
@@ -166,6 +166,39 @@ TEST(TriangleKernel, Works) {
   kernel = TriangleKernel(cv::Size(1, 1));
   ASSERT_EQ(cv::Size(1, 1), kernel.size());
   ASSERT_EQ(1.0f, kernel.at<float>(0, 0));
+}
+
+TEST(ComputeFlowDivergence, DISABLED_TODO) {}
+
+TEST(ProbabilityOfOcclusion, CorrectMovingSquare) {
+  // A 6x6 square is moving from (2,2) to (4,2) (two pixels to the right).
+  // The occluded region should be a cv::Rect(8, 2, 2, 6) (i.e. two pixels to
+  // the right of the original rectangle's location).
+  constexpr int kHeight = 6;
+  constexpr int kWidth = 6;
+  constexpr int kX = 2;
+  constexpr int kY = 2;
+  cv::Mat I0(10, 10, CV_32FC1, cv::Scalar(0));
+  cv::Mat I1(10, 10, CV_32FC1, cv::Scalar(0));
+  I0(cv::Rect(kX, kY, kWidth, kHeight)).setTo(1.0f);
+  I1(cv::Rect(kX + 2, kY, kWidth, kHeight)).setTo(1.0f);
+  cv::Mat wx(10, 10, CV_32FC1, cv::Scalar(0.0f));
+  cv::Mat wy(10, 10, CV_32FC1, cv::Scalar(0.0f));
+  wx(cv::Rect(kX, kY, kWidth, kHeight)).setTo(2.0f);
+
+  cv::Mat expected_occ(10, 10, CV_32FC1, cv::Scalar(0));
+  expected_occ(cv::Rect(kX + kWidth, kY, 2, kHeight)).setTo(1.0f);
+
+  cv::Mat flow;
+  cv::merge(std::vector<cv::Mat>{wx, wy}, flow);
+
+  constexpr float kSigmaD = 1e5;
+  constexpr float kSigmaI = 1e-5;
+  cv::Mat occ = ProbabilityOfOcclusion(I0, I1, flow, kSigmaD, kSigmaI);
+  EXPECT_NEAR(0.0f, cv::norm(occ - expected_occ), 1e-3)
+      << "Predicted incorrect occlusion? Predicted: \n"
+      << occ << "\nExpected:\n"
+      << expected_occ;
 }
 
 }  // namespace flowthrone
