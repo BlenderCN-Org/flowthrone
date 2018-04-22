@@ -1,12 +1,11 @@
 #include "optical_flow_tf_model.h"
 
+#include "flow_smoothing.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "tensorflow/cc/saved_model/loader.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tf_utils.h"
 #include "utils.h"
-
-#include "opencv2/highgui/highgui.hpp"
 
 namespace tf = tensorflow;
 
@@ -239,7 +238,21 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0_in, const cv::Mat& I1_in,
     cv::merge(std::vector<cv::Mat>{counts, counts}, counts_32fc2);
     flow_ref = flow_ref / counts_32fc2;
   }
+
+  Postprocess(I0_in, I1_in, flow);
   return true;
+}
+
+void OpticalFlowTensorFlowModel::Postprocess(const cv::Mat& I0_in,
+                                             const cv::Mat& I1_in,
+                                             cv::Mat* flow) {
+  if (opts_.has_denoising_options()) {
+    DenoisingOptions dn_opts;
+    dn_opts.sigma_intensity = opts_.denoising_options().sigma_intensity();
+    dn_opts.sigma_distance = opts_.denoising_options().sigma_distance();
+    dn_opts.window_size = opts_.denoising_options().window_size();
+    *flow = DenoiseColorWeightedFilter(*flow, I0_in, dn_opts);
+  }
 }
 
 }  // namespace flowthrone

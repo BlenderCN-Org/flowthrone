@@ -18,13 +18,23 @@ message OpticalFlowTensorFlowModelOptions {
   // collection of windows, which are then fed to the network.
   // Setting the parameter to true is obviously more expensive, but will likely
   // give nicer results.
-  optional bool sliding_window = 2 [default = true];
+  optional bool sliding_window = 2 [ default = true ];
   // Stride used when sliding_window is set to true. Values larger than 1.0 are
   // discouraged (since it implies that windows have gaps, which does not
   // really make sense). When set to 1.0, there is no overlap, and you might
   // see undesireable artifacts at the boundary.
-  optional double window_stride = 3 [default = 1.0];
+  optional double window_stride = 3 [ default = 1.0 ];
+
+  // Options for smoothing/denoising flow field. No smoothing will be done if
+  // the field is not specified.
+  optional FlowDenoisingOptions denoising_options = 6;
 };
+
+message FlowDenoisingOptions {
+  optional float sigma_intensity = 1 [ default = 1.0 ];
+  optional float sigma_distance = 2 [ default = 1.0 ];
+  optional int32 window_size = 3 [ default = 5 ];
+}
 
 // Message for specifying a collection of image pair / groundtruth triplets,
 // to be used for evaluation.

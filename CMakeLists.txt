@@ -64,6 +64,8 @@ target_link_libraries(flowthrone_proto ${PROTOBUF_LIBRARY})
 ###############################################################################
 # This is the main library that the binaries should link.
 add_library(flowthrone STATIC
+  flowthrone/cpp/flow_smoothing.cpp
+  flowthrone/cpp/flow_smoothing.h
   flowthrone/cpp/io.cpp
   flowthrone/cpp/io.h
   flowthrone/cpp/optical_flow_model.cpp
@@ -226,10 +228,19 @@ target_link_libraries(tf_utils_test
   ${GFLAGS_LIBRARIES}
 )
 
+add_executable(flow_smoothing_test flowthrone/cpp/flow_smoothing_test.cpp)
+target_link_libraries(flow_smoothing_test
+  flowthrone
+  test_utils
+  ${GTEST_BOTH_LIBRARIES}
+  ${GFLAGS_LIBRARIES}
+)
+
 # List of tests.
 enable_testing()
 add_test(io_test io_test)
 add_test(visualization_test visualization_test)
 add_test(evaluation_test evaluation_test)
 add_test(utils_test utils_test)
-add_test(tf_utils_tets tf_utils_test)
+add_test(tf_utils_test tf_utils_test)
+add_test(flow_smoothing_test flow_smoothing_test)

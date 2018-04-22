@@ -4,3 +4,10 @@ output_tensor_name: ["prediction"]
 
 sliding_window: true
 window_stride: 0.25  
+
+# Cross-bilateral filtering. This is slow: if timing is of concern, disable it.
+denoising_options {
+  sigma_intensity: 16.0
+  sigma_distance: 4.0
+  window_size: 5
+}

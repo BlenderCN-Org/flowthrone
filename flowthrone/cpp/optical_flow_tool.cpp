@@ -6,15 +6,15 @@
 //   ./optical_flow_main --video /tmp/input.mp4 --output_video /tmp/flow.avi
 //
 #include <memory>
-#include "opencv2/core/core.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "visualization.h"
 #include "io.h"
-#include "signal_handling.h"
+#include "opencv2/core/core.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 #include "optical_flow_model.h"
+#include "signal_handling.h"
+#include "visualization.h"
 
 static const std::string gUsageMessage = R"(
 Tool for running and visualizing optical flow.
@@ -42,7 +42,8 @@ DEFINE_string(options, "config/flowthrone.pbtxt",
 DEFINE_double(scale, 0.5,
               "Factor by which input images/video should be "
               "rescaled, prior to the optical flow call.");
-
+DEFINE_int32(skip_frames, 0,
+             "Number of frames to skip from the beginning of the video.");
 namespace flowthrone {
 
 // Abstraction over a pair of images, or a video sequence.
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
   std::unique_ptr<Feeder> data_feeder = Feeder::Create();
   std::vector<cv::Mat> images(2);
   CHECK(data_feeder->next(&images[1])) << "Could not read first image.";
-  
+
   std::unique_ptr<OpticalFlowModel> model =
       OpticalFlowModel::Create(FLAGS_options);
 
@@ -83,7 +84,9 @@ int main(int argc, char** argv) {
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
   // we do not complete all frames).
   flowthrone::InstallSigIntHandler();
+  int frame_index = -1;
   while (true) {
+    frame_index++;
     // Push the old image to the 'back' of the queue, and fill in latest image.
     std::swap(images[0], images[1]);
     images[1] = cv::Mat();
@@ -91,9 +94,12 @@ int main(int argc, char** argv) {
     if (!data_feeder->next(&images[1]) || (images[1].total() == 0)) {
       LOG(INFO) << "No more images left!";
       break;
-    } else {
-      LOG(INFO) << "Computing flow.";
     }
+    if (frame_index < FLAGS_skip_frames) {
+      continue;
+    }
+
+    LOG(INFO) << "Computing flow.";
     cv::Mat predicted_flow;
     model->Run(images[0], images[1], &predicted_flow);
 
@@ -108,7 +114,10 @@ int main(int argc, char** argv) {
         cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
       }
       cv::imshow("image", vis);
-      cv::waitKey(0);
+      int key = cv::waitKey(0);
+      if (key == 27) {
+        break;
+      }
     }
     if (!FLAGS_output.empty()) {
       if (video_writer) {
@@ -145,6 +154,7 @@ class VideoFeeder : public Feeder {
     *output = img;
     return success;
   }
+
  private:
   cv::VideoCapture video_;
 };
@@ -167,6 +177,7 @@ class ImageFeeder : public Feeder {
     index_++;
     return true;
   }
+
  private:
   std::vector<cv::Mat> images_;
   int index_ = 0;

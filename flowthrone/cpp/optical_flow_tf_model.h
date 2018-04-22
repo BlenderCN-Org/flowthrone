@@ -54,6 +54,7 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   void InitializeFromSavedModel(const std::string& export_dir,
                                 const std::string& tag);
 
+  void Postprocess(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow);
   OpticalFlowTensorFlowModelOptions opts_;
 
   std::unique_ptr<internal::Context> context_;
