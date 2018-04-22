@@ -1,8 +1,8 @@
 #pragma once
-#include "opencv2/core/core.hpp"
-#include "tensorflow/core/public/session.h"
-#include "optical_flow_model.h"
 #include "flowthrone.pb.h"
+#include "opencv2/core/core.hpp"
+#include "optical_flow_model.h"
+#include "tensorflow/core/public/session.h"
 
 namespace flowthrone {
 
@@ -23,6 +23,9 @@ struct Context {
   // call.
   bool need_is_training_placeholder = false;
 
+  // Whether inputs are of type uint8_t or float.
+  bool inputs_are_uint8 = false;
+
   std::unique_ptr<tensorflow::Session> session;
 
   static std::unique_ptr<Context> Create(
@@ -34,10 +37,8 @@ struct Context {
   // Given two images (possibly different resolutions, and not necessarily
   // matching the input resolution of the network), runs inference and fills
   // in the result.
-  // Input images must be of type CV_32F, and the output image will similarly
-  // be CV_32F.
-  void RunInference(const cv::Mat& I0f_in, const cv::Mat& I1f_in,
-                    cv::Mat* flow);
+  // Output image will be CV_32FC2.
+  void RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in, cv::Mat* flow);
 };
 
 }  // namespace internal

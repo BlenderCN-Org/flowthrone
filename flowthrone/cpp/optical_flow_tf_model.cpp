@@ -1,10 +1,10 @@
 #include "optical_flow_tf_model.h"
 
-#include "tf_utils.h"
-#include "utils.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "tensorflow/cc/saved_model/loader.h"
 #include "tensorflow/core/public/session_options.h"
+#include "tf_utils.h"
+#include "utils.h"
 
 #include "opencv2/highgui/highgui.hpp"
 
@@ -36,6 +36,14 @@ const tf::NodeDef* GetTensorByName(const tf::GraphDef& graph,
   return nullptr;
 }
 
+tf::DataType GetTensorDataType(const tf::GraphDef& graph_def,
+                               const std::string& name) {
+  const tf::NodeDef* node = GetTensorByName(graph_def, name);
+  CHECK(node) << "Could not find tensor called '" << name << "'";
+  CHECK(node->attr().count("dtype"));
+  return node->attr().at("dtype").type();
+}
+
 tf::TensorShapeProto GetTensorShapeProto(const tf::GraphDef& graph_def,
                                          const std::string& name) {
   const std::string kShapeKey = "_output_shapes";
@@ -58,6 +66,7 @@ tf::TensorShape GetInputTensorShape(const tf::GraphDef& graph_def,
                                     const std::string& in2_name) {
   tf::TensorShapeProto x1_shape = GetTensorShapeProto(graph_def, in1_name);
   tf::TensorShapeProto x2_shape = GetTensorShapeProto(graph_def, in2_name);
+
   CHECK_EQ(x1_shape.SerializeAsString(), x2_shape.SerializeAsString())
       << "Shapes of the two tensors do not match as expected. Maybe tensor "
       << "names do not correspond to the two input images? Names were: "
@@ -114,6 +123,14 @@ std::unique_ptr<Context> Context::Create(
                                   context->output_shape.dim_size(1));
   context->need_is_training_placeholder =
       static_cast<bool>(GetTensorByName(graph_def, "is_training"));
+
+  {  // Verify that both inputs are of the same type and set expected type.
+    auto x1_type = GetTensorDataType(graph_def, context->input_names[0]);
+    auto x2_type = GetTensorDataType(graph_def, context->input_names[1]);
+    CHECK_EQ(x1_type, x2_type) << "Inputs do not have the same data type?";
+    context->inputs_are_uint8 = (x1_type == tf::DT_UINT8);
+  }
+
   context->session = std::move(session);
   return std::move(context);
 }
@@ -127,11 +144,11 @@ Context::~Context() {
 // TODO: Network is fully-convolutional, so there needs to be a flag to
 // optionally keep inputs as they are -- and run the network without doing
 // any resizing.
-void Context::RunInference(const cv::Mat& I0f_in, const cv::Mat& I1f_in,
+void Context::RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in,
                            cv::Mat* flow) {
   // Size of the input fed into this function.
   // This will be used to resize the output.
-  cv::Size original_input_output_size = I0f_in.size();
+  cv::Size original_input_output_size = I0_in.size();
 
   std::vector<std::pair<std::string, tf::Tensor>> inputs_tf;
   inputs_tf.push_back(std::make_pair(input_names[0], tf::Tensor()));
@@ -142,11 +159,11 @@ void Context::RunInference(const cv::Mat& I0f_in, const cv::Mat& I1f_in,
 
   std::vector<tf::Tensor> outputs_tf;
 
-  cv::Mat I0f, I1f;
-  cv::resize(I0f_in, I0f, input_size);
-  cv::resize(I1f_in, I1f, input_size);
-  AsTensor(I0f, &inputs_tf[0].second);
-  AsTensor(I1f, &inputs_tf[1].second);
+  cv::Mat I0, I1;
+  cv::resize(I0_in, I0, input_size);
+  cv::resize(I1_in, I1, input_size);
+  AsTensor(I0, &inputs_tf[0].second);
+  AsTensor(I1, &inputs_tf[1].second);
   CHECK_STATUS(session->Run(inputs_tf, {output_names[0]}, {}, &outputs_tf));
   CHECK_EQ(1, outputs_tf.size());
   const tf::Tensor& output_tf = outputs_tf[0];
@@ -170,15 +187,23 @@ void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
 
 OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {}
 
-bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
+bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0_in, const cv::Mat& I1_in,
                                      cv::Mat* flow) {
-  CheckNumberOfChannels(I0, context_->input_shape.dim_size(2));
-  CheckNumberOfChannels(I1, context_->input_shape.dim_size(2));
-  cv::Mat I0f = MaybeConvertTo32F(I0);
-  cv::Mat I1f = MaybeConvertTo32F(I1);
+  CheckNumberOfChannels(I0_in, context_->input_shape.dim_size(2));
+  CheckNumberOfChannels(I1_in, context_->input_shape.dim_size(2));
+  cv::Mat I0, I1;
+  // Convert inputs to float if necessary. Newer models shall take in uint8
+  // as inputs, but for backward compatibility float inputs are supported too.
+  if (context_->inputs_are_uint8) {
+    I0 = I0_in;
+    I1 = I1_in;
+  } else {
+    I0 = MaybeConvertTo32F(I0_in);
+    I1 = MaybeConvertTo32F(I1_in);
+  }
 
   if (!opts_.sliding_window()) {
-    context_->RunInference(I0f, I1f, flow);
+    context_->RunInference(I0, I1, flow);
   } else {
     // Doesn't __really__ need to be the case.
     cv::Size patch_sz = context_->input_size;
@@ -197,10 +222,10 @@ bool OpticalFlowTensorFlowModel::Run(const cv::Mat& I0, const cv::Mat& I1,
     for (const auto& rect : patch_locations) {
       // At the boundaries, rect.size() != patch_sz, so the patch (and the
       // kernel) may need to be resized even if patch_sz == network input size.
-      cv::Mat I0f_patch = I0f(rect);
-      cv::Mat I1f_patch = I1f(rect);
+      cv::Mat I0_patch = I0(rect);
+      cv::Mat I1_patch = I1(rect);
       cv::Mat flow_patch;
-      context_->RunInference(I0f_patch, I1f_patch, &flow_patch);
+      context_->RunInference(I0_patch, I1_patch, &flow_patch);
 
       cv::Mat this_kernel;
       cv::resize(kernel, this_kernel, rect.size());

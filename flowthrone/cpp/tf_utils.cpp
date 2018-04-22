@@ -29,16 +29,15 @@ void CheckInputIsConsistent(const std::vector<cv::Mat>& mats) {
          "of channels.";
 }
 
+template <typename T>
 void FillPreallocatedTensor(const cv::Mat& mat, int idx, tf::Tensor* tensor) {
-  CHECK_EQ(mat.depth(), CV_32F) << "Input matrix must be CV_32F";
-  auto tensor_mapped = tensor->tensor<float, 4>();
+  auto tensor_mapped = tensor->tensor<T, 4>();
   int rows = mat.rows;
   int cols = mat.cols;
   int channels = mat.channels();
-  // int row_size = channels * cols * sizeof(float);
 
   for (int r = 0; r < rows; ++r) {
-    const float* row = reinterpret_cast<const float*>(mat.row(r).data);
+    const T* row = reinterpret_cast<const T*>(mat.row(r).data);
     for (int c = 0; c < cols; ++c) {
       for (int k = 0; k < channels; ++k) {
         tensor_mapped(idx, r, c, k) = row[k + channels * c];
@@ -80,10 +79,20 @@ void AsTensor(const std::vector<cv::Mat>& mats, tf::Tensor* tensor) {
   int cols = mats[0].cols;
   int channels = mats[0].channels();
 
-  *tensor =
-      tf::Tensor(tf::DT_FLOAT, tf::TensorShape({n, rows, cols, channels}));
-  for (int i = 0; i < n; ++i) {
-    FillPreallocatedTensor(mats[i], i, tensor);
+  if (mats[0].depth() == CV_32F) {
+    *tensor =
+        tf::Tensor(tf::DT_FLOAT, tf::TensorShape({n, rows, cols, channels}));
+    for (int i = 0; i < n; ++i) {
+      FillPreallocatedTensor<float>(mats[i], i, tensor);
+    }
+  } else if (mats[0].depth() == CV_8U) {
+    *tensor =
+        tf::Tensor(tf::DT_UINT8, tf::TensorShape({n, rows, cols, channels}));
+    for (int i = 0; i < n; ++i) {
+      FillPreallocatedTensor<uint8_t>(mats[i], i, tensor);
+    }
+  } else {
+    LOG(FATAL) << "Not implemented.";
   }
 }
 
@@ -92,9 +101,18 @@ void AsTensor(const cv::Mat& mat, tf::Tensor* tensor) {
   int cols = mat.cols;
   int channels = mat.channels();
 
-  *tensor =
-      tf::Tensor(tf::DT_FLOAT, tf::TensorShape({1, rows, cols, channels}));
-  FillPreallocatedTensor(mat, 0, tensor);
+  if (mat.depth() == CV_32F) {
+    *tensor =
+        tf::Tensor(tf::DT_FLOAT, tf::TensorShape({1, rows, cols, channels}));
+    FillPreallocatedTensor<float>(mat, 0, tensor);
+  } else if (mat.depth() == CV_8U) {
+    *tensor =
+        tf::Tensor(tf::DT_UINT8, tf::TensorShape({1, rows, cols, channels}));
+    FillPreallocatedTensor<uint8_t>(mat, 0, tensor);
+  } else {
+    LOG(FATAL) << "Not implemented: you passed a cv::Mat of type "
+               << mat.type();
+  }
 }
 
 void AsMat(const tf::Tensor& tensor, std::vector<cv::Mat>* mats) {
@@ -117,24 +135,6 @@ void AsMat(const tf::Tensor& tensor, cv::Mat* mat) {
   CHECK_EQ(tf::DT_FLOAT, tensor.dtype()) << "Input tensor must be DT_FLOAT";
   *mat = cv::Mat();
   FillMat(tensor, 0, mat);
-}
-
-// Deprecated.
-tf::Tensor AsTensor(const cv::Mat& x) {
-  CHECK_EQ(x.depth(), CV_32F) << "Input matrix must be CV_32F";
-  tf::Tensor y(tf::DT_FLOAT,
-               tf::TensorShape({1, x.rows, x.cols, x.channels()}));
-  FillPreallocatedTensor(x, 0, &y);
-  return y;
-}
-
-cv::Mat AsMat(const tf::Tensor& x) {
-  CHECK_EQ(tf::DT_FLOAT, x.dtype()) << "Input tensor must be DT_FLOAT";
-  CHECK_EQ(x.dims(), 4) << "Input tensor must have 4 dimensions.";
-  CHECK_EQ(1, x.dim_size(0)) << "Batch size of the input tensor must be 1";
-  cv::Mat output;
-  FillMat(x, 0, &output);
-  return output;
 }
 
 void CHECK_STATUS(const tf::Status& x) { CHECK(x.ok()) << x.ToString(); }

@@ -161,7 +161,9 @@ std::vector<cv::Rect> SplitImage(cv::Size image_sz, cv::Size patch_sz,
   CHECK(stride.width >= 1 && stride.height >= 1) << "Stride must be positive.";
   CHECK(image_sz.width >= patch_sz.width && image_sz.height >= patch_sz.height)
       << "Currently only support tiling of images that are at least as large "
-         "as the patch size.";
+         "as the patch size. Current image size is: "
+      << image_sz.width << "x" << image_sz.height
+      << " but patch size is: " << patch_sz.width << "x" << patch_sz.height;
   CHECK(patch_sz.width >= stride.width && patch_sz.height >= stride.height)
       << "Patch must be larger than stride. In other words, it is only "
          "possible to densely tile the image.";

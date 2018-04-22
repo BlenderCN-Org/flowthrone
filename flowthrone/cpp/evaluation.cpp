@@ -61,13 +61,14 @@ float FlowAngularError(const cv::Mat& flow, const cv::Mat& flow_gt,
       if (IsInvalidWarp(uv_gt)) {
         continue;
       }
-      const float numerator = 1.0f + uv_gt[0] * uv[0] + uv_gt[1] * uv[1];
-      const float denominator =
-          sqrt(1 + uv_gt[0] * uv_gt[0] + uv_gt[1] * uv_gt[1]) *
-          sqrt(1 + uv[0] * uv[0] + uv[1] * uv[1]);
-      float ratio = numerator / denominator;
-      ratio = std::min(std::max(ratio, -1.0f), +1.0f);
-      const float e = acos(ratio);
+      // Promote to double, for numerical reasons.
+      const double numerator = 1.0 + uv_gt[0] * uv[0] + uv_gt[1] * uv[1];
+      const double denominator =
+          std::sqrt(1.0 + uv_gt[0] * uv_gt[0] + uv_gt[1] * uv_gt[1]) *
+          std::sqrt(1.0 + uv[0] * uv[0] + uv[1] * uv[1]);
+      double ratio = numerator / denominator;
+      ratio = std::min(std::max(ratio, -1.0), +1.0);
+      const double e = std::acos(ratio);
       CHECK(0 <= e && e <= M_PI);
       error.at<float>(r, c) = e;
       sum_of_errors += e;

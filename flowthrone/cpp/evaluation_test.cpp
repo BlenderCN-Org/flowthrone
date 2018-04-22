@@ -1,23 +1,23 @@
 #include "evaluation.h"
-#include "test_utils.h"
-#include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <gtest/gtest.h>
 #include <numeric>
+#include "test_utils.h"
 
 namespace flowthrone {
 
 TEST(FlowEndpointError, ZeroErrorWhenArgumentsAreSame) {
   cv::Mat uv = GetRandomFlow(20, 40);
   cv::Mat uv_error;
-  EXPECT_FLOAT_EQ(0.0f, FlowEndpointError(uv, uv, &uv_error));
-  EXPECT_EQ(0.0f, cv::norm(uv_error));
+  EXPECT_NEAR(0.0f, FlowEndpointError(uv, uv, &uv_error), 1e-5);
+  EXPECT_NEAR(0.0f, cv::norm(uv_error), 1e-5);
 }
 
 TEST(FlowAngularError, ZeroErrorWhenArgumentsAreSame) {
   cv::Mat uv = GetRandomFlow(20, 40);
   cv::Mat uv_error;
-  EXPECT_FLOAT_EQ(0.0f, FlowAngularError(uv, uv, &uv_error));
-  EXPECT_EQ(0.0f, cv::norm(uv_error));
+  EXPECT_NEAR(0.0f, FlowAngularError(uv, uv, &uv_error), 1e-5);
+  EXPECT_NEAR(0.0f, cv::norm(uv_error), 1e-5);
 }
 
 TEST(FlowEndpointError, Correct) {
