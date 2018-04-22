@@ -58,11 +58,11 @@ class TrainingManager:
             lambda x: dataset_utils.decode_tf_example(x, config['image_size']))
         self.dataset_train = self.dataset_train.batch(
             config['batch_size']).repeat()
-        self.dataset_test = self.dataset.test.map(
+        self.dataset_test = self.dataset_test.map(
             lambda x: dataset_utils.decode_tf_example(x, config['image_size']))
         self.dataset_test = self.dataset_test.batch(
             config['batch_size']).repeat()
-        if config.shuffle:
+        if config['shuffle']:
             shuffle_buffer = 4
             self.dataset.train = self.dataset.train.shuffle(shuffle_buffer)
             self.dataset.test = self.dataset.test.shuffle(shuffle_buffer)
