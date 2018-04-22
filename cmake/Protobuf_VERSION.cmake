@@ -1,2 +1,2 @@
-set(Protobuf_URL http://mirror.bazel.build/github.com/google/protobuf/archive/0b059a3d8a8f8aa40dde7bea55edca4ec5dfea66.tar.gz,)
+set(Protobuf_URL https://mirror.bazel.build/github.com/google/protobuf/archive/396336eb961b75f03b25824fe86cf6490fb75e3a.tar.gz)
 set(Protobuf_INSTALL_DIR /usr/local)

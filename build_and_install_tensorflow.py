@@ -74,7 +74,6 @@ def copy_headers(tf_repo_path):
 
     for p in [
             'tensorflow/core/framework',
-            'tensorflow/core/kernels',
             'tensorflow/core/lib/core',
             'tensorflow/core/protobuf',
             'tensorflow/core/util',
@@ -103,8 +102,7 @@ def copy_third_party(tf_repo_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description=
-        '''Helper script for building and installing tensorflow as a shared
+        description='''Helper script for building and installing tensorflow as a shared
            library, to be then used in a CMake project. Prior to running it
            you must first checkout tensorflow repo. The shared library and
            all required headers will be placed in {} and {}, respectively.
