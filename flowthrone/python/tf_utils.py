@@ -15,6 +15,14 @@ def resample_flow(uv, out_shape):
     scale_y = out_shape[1] / float(uv_shape[2])
     assert scale_x == scale_y, \
             "Currently flow resampling can only be isotropic."
+    # NOTE: JIT-XLA op is not implemented with align_corners == False. What
+    # does 'align_corners' actually refer to? As far as I can tell, the scaling
+    # factor between the two approaches differs by a tiny amount (e.g. if
+    # we wanted to downsize the image by 2x, with align_corners == true, the
+    # scaling would be a little bit larger. This is _probably_ okay for our
+    # purposes?
+    # On the other hand, JIT-XLA does not work well with the current CUDA/driver
+    # pair, so this discussion is moot.
     return tf.image.resize_images(uv, [out_shape[0], out_shape[1]]) * scale_x
 
 
@@ -30,15 +38,14 @@ def angular_flow_error(x, y, w=None):
     assert y.shape[3] == 2, "Flow field must have two channels!"
     epsilon = 1e-2
     num = 1.0 + x[:, :, :, 0] * y[:, :, :, 0] + x[:, :, :, 1] * y[:, :, :, 1]
-    den1 = tf.sqrt(1.0 + x[:, :, :, 0] * x[:, :, :, 0] +
-                   x[:, :, :, 1] * x[:, :, :, 1] + epsilon)
-    den2 = tf.sqrt(1.0 + y[:, :, :, 0] * y[:, :, :, 0] +
-                   y[:, :, :, 1] * y[:, :, :, 1] + epsilon)
+    den1 = tf.sqrt(1.0 + x[:, :, :, 0] * x[:, :, :, 0] + x[:, :, :, 1] *
+                   x[:, :, :, 1] + epsilon)
+    den2 = tf.sqrt(1.0 + y[:, :, :, 0] * y[:, :, :, 0] + y[:, :, :, 1] *
+                   y[:, :, :, 1] + epsilon)
     lo_bound = -1.0 + epsilon
     hi_bound = 1.0 - epsilon
     ratio = tf.maximum(lo_bound,
                        tf.minimum(hi_bound, num / (epsilon + den1 * den2)))
-    #ratio = num/(den1*den2)
     if w is not None:
         return tf.acos(ratio) * tf.reduce_mean(w, axis=3)
     else:
@@ -145,7 +152,7 @@ def _clip_values(x, y):
 
 def _get_pixel_values(images, xx, yy):
     """ Returns a 4D tensor with points sampled at the given locations.
-        USERS SHOULD BE CALLING THIS FUNCTION DIRECTLY. """
+        USERS SHOULD NOT BE CALLING THIS FUNCTION DIRECTLY. """
     assert xx.shape[1] == yy.shape[1]
     assert xx.shape[2] == yy.shape[2]
     # Points outside of image boundaries are truncated to the boundary pixels.
@@ -155,8 +162,7 @@ def _get_pixel_values(images, xx, yy):
     batch_idx = tf.reshape(batch_idx, [n, 1, 1])
     b = tf.tile(batch_idx, [1, xx.shape[1], xx.shape[2]])
     indices = tf.stack(
-        [b, tf.cast(yy_clipped, tf.int32),
-         tf.cast(xx_clipped, tf.int32)],
+        [b, tf.cast(yy_clipped, tf.int32), tf.cast(xx_clipped, tf.int32)],
         axis=3)
     return tf.gather_nd(images, indices)
 

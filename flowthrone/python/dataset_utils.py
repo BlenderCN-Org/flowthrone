@@ -78,6 +78,11 @@ class DataFeeder:
         """
         idx = range(len(self._files))
         np.random.shuffle(idx)
+        assert len(self._files) == len(self._I1s)
+        assert len(self._I1s) == len(self._I2s)
+        assert len(self._I2s) == len(self._flos)
+        assert len(self._flos) == len(self._weights)
+
         self._files = [self._files[i] for i in idx]
         self._I1s = [self._I1s[i] for i in idx]
         self._I2s = [self._I2s[i] for i in idx]
@@ -98,9 +103,20 @@ class DataFeeder:
         idx = np.mod(idx, n)
         self._cur_idx = (idx[-1] + 1) % n
 
-        return zip(
-            *[[self._I1s[i], self._I2s[i], self._flos[i], self._weights[i]]
-              for i in idx])
+        return zip(* [[
+            self._I1s[i], self._I2s[i], self._flos[i], self._weights[i]
+        ] for i in idx])
+
+        ##pts = []
+        ##for i in idx:
+        ##    I1 = self._I1s[i]
+        ##    I2 = self._I2s[i]
+        ##    uv = self._flos[i]
+        ##    triplet = [uv, I1, I2]
+        ##    triplet = generate_example_triplet_flip(triplet, \
+        ##            flip_x=random.randint(0, 1), flip_y=random.randint(0, 1))
+        ##    pts.append([triplet[1], triplet[2], triplet[0], self._weights[i]])
+        ##return zip(*pts)
 
     def _load_all(self):
         self._I1s = []
@@ -109,16 +125,20 @@ class DataFeeder:
         self._weights = []
 
         target_size = (self._image_size, self._image_size)
-        for f in self._files:
-            print "Loading ", f
+        files = []
+        for idx, f in enumerate(self._files):
+            print "Loading {}/{}: {}".format(idx, len(self._files), f)
             I1, I2, flo = self._load_triple(f, normalize=False)
-            if len(I1.shape) == 0 or len(I2.shape) == 0:
+            if I1 is None or I2 is None or len(I1.shape) == 0 or len(
+                    I2.shape) == 0:
                 print "Encountered invalid triple, skipping: ", f
                 continue
-
+                # TODO: this create inconsistency between self.files length and
+                # I1/I2 length.
             if self._image_size is not I1.shape[0]:
                 I1 = cv2.resize(I1, target_size)
                 I2 = cv2.resize(I2, target_size)
+                # BAD!!! DO NOT DO THIS!!!
                 orig_width = flo.shape[1]
                 orig_height = flo.shape[0]
                 flo[:, :, 0] *= target_size[0] / orig_height
@@ -131,16 +151,27 @@ class DataFeeder:
             # Zero out invalid pixels.
             flo[np.isnan(flo)] = 0.0
 
+            flip_x = random.randint(0, 1)
+            flip_y = random.randint(0, 1)
+            print "Flipping: {} {}".format(flip_x, flip_y)
+            flo, I1, I2 = generate_example_triplet_flip([flo, I1, I2], flip_x,
+                                                        flip_y)
+
             self._I1s.append(I1)
             self._I2s.append(I2)
             self._flos.append(flo)
             self._weights.append(weights)
+            files.append(f)
+        self._files = files
 
     def _load_triple(self, fn_triplet, normalize):
         flo = np.asarray(utils.read_flo(fn_triplet[0]), dtype='float32')
-        I1 = np.asarray(cv2.imread(fn_triplet[1]), dtype='float32')
-        I2 = np.asarray(cv2.imread(fn_triplet[2]), dtype='float32')
+        #I1 = np.asarray(cv2.imread(fn_triplet[1]), dtype='float32')
+        #I2 = np.asarray(cv2.imread(fn_triplet[2]), dtype='float32')
+        I1 = cv2.imread(fn_triplet[1])
+        I2 = cv2.imread(fn_triplet[2])
         if normalize:
+            assert False
             I1 = (I1 - 128.0) / 128.0
             I2 = (I2 - 128.0) / 128.0
         return (I1, I2, flo)
@@ -198,10 +229,11 @@ class Dataset:
                                  f.replace(self._FLOW_MATCHER, self._IMG1_FN))
             i2_fn = os.path.join(dataset_path,
                                  f.replace(self._FLOW_MATCHER, self._IMG2_FN))
-            try:
-                Dataset._check_files_exist(flo_fn, i1_fn, i2_fn)
-            except:
-                pass
+            #try:
+            Dataset._check_files_exist(flo_fn, i1_fn, i2_fn)
+            #except:
+            #    continue
+
             if i % num_splits == 0:
                 self._val_file_list.append([flo_fn, i1_fn, i2_fn])
             else:
@@ -243,8 +275,7 @@ def resize_triplet(triplet, scale):
     tuple. """
     sz = (int(triplet[0].shape[0] * scale), int(triplet[0].shape[1] * scale))
     return [
-        utils.resample_flow(triplet[0], sz),
-        cv2.resize(triplet[1], sz),
+        utils.resample_flow(triplet[0], sz), cv2.resize(triplet[1], sz),
         cv2.resize(triplet[2], sz)
     ]
 
@@ -272,6 +303,8 @@ def generate_example_triplet_scale(triplet,
     # (target_size, target_size) sized crop later.
     if min_scale > scale_range[0]:
         scale_range[0] = min_scale
+    if scale_range[0] > scale_range[1]:
+        scale_range[1] = scale_range[0]
     scale = np.random.uniform(low=scale_range[0], high=scale_range[1])
     return resize_triplet(triplet, scale)
 
@@ -291,18 +324,18 @@ def generate_example_triplet_shift_and_crop(triplet, target_size):
     if cols > target_size[1]:
         x_offset = np.random.randint(0, cols - target_size[1])
 
-    flow = triplet[0][y_offset:y_offset + target_size[0], x_offset:
-                      x_offset + target_size[1], :]
-    img1 = triplet[1][y_offset:y_offset + target_size[0], x_offset:
-                      x_offset + target_size[1], :]
-    img2 = triplet[2][y_offset:y_offset + target_size[0], x_offset:
-                      x_offset + target_size[1], :]
+    flow = triplet[0][y_offset:y_offset + target_size[0], x_offset:x_offset +
+                      target_size[1], :]
+    img1 = triplet[1][y_offset:y_offset + target_size[0], x_offset:x_offset +
+                      target_size[1], :]
+    img2 = triplet[2][y_offset:y_offset + target_size[0], x_offset:x_offset +
+                      target_size[1], :]
     return [flow, img1, img2]
 
 
 def generate_example_triplet_flip(triplet, flip_x=False, flip_y=False):
     """ Flips and returns a given triplet. """
-    output = [np.copy(triplet[0]), np.copy(triplet[1]), np.copy(triplet[2])]
+    output = triplet
     if flip_y:
         output[1] = cv2.flip(output[1], 0)
         output[2] = cv2.flip(output[2], 0)
@@ -316,3 +349,82 @@ def generate_example_triplet_flip(triplet, flip_x=False, flip_y=False):
         # negate flow along x.
         output[0][:, :, 0] *= -1
     return output
+
+
+def generate_example_triplet_brightness(triplet, alpha=1.0, beta=0.0):
+    """ Applies an affine transformation to image values and returns the
+        triplet.
+    """
+    output = triplet
+    output[1] = output[1] * alpha + beta
+    output[2] = output[2] * alpha + beta
+    return output
+
+
+def _bytes_feature(value):
+    import tensorflow as tf
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def _float_feature(value):
+    import tensorflow as tf
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+
+
+def as_tf_train_example(x1, x2, flow):
+    """ Returns triplet as tf.train.Example instance. """
+    import tensorflow as tf
+    assert x1.dtype == np.uint8
+    assert x2.dtype == np.uint8
+    assert flow.dtype == np.float32
+
+    features = tf.train.Features(feature={
+        'x1': _bytes_feature(x1.tostring()),
+        'x2': _bytes_feature(x2.tostring()),
+        'y': _bytes_feature(flow.tostring()),
+    })
+    return tf.train.Example(features=features)
+
+
+def decode_tf_example(serialized_example, imsize):
+    """ Parses image pair and groundtruth flow from the given
+        `serialized_example`. Returns x1, x2, y (pair of images, followed by
+        optical flow. """
+    import tensorflow as tf
+    features = tf.parse_single_example(
+        serialized_example,
+        features={
+            'x1': tf.FixedLenFeature([], tf.string),
+            'x2': tf.FixedLenFeature([], tf.string),
+            'y': tf.FixedLenFeature([], tf.string),
+        })
+
+    x1 = tf.reshape(
+        tf.decode_raw(
+            features['x1'], out_type=tf.uint8, name='x1'),
+        shape=[imsize, imsize, 3])
+    x2 = tf.reshape(
+        tf.decode_raw(
+            features['x2'], out_type=tf.uint8, name='x2'),
+        shape=[imsize, imsize, 3])
+    y = tf.reshape(
+        tf.decode_raw(
+            features['y'], out_type=tf.float32, name='y'),
+        shape=[imsize, imsize, 2])
+    return x1, x2, y
+
+
+def write_tf_records_dataset(input_files_list, output_filename):
+    """ Given a list of [flow, img1, img2] filename tuples, writes a
+        TFRecordWriter file """
+    import tensorflow as tf
+
+    for flow_fn, img1_fn, img2_fn in input_files_list:
+        print "Wrote triplet from file: ", os.path.basename(flow_fn)
+        flow, img1, img2 = read_triplet(flow_fn, img1_fn, img2_fn)
+        img1 = img1.astype(dtype=np.uint8)
+        img2 = img2.astype(dtype=np.uint8)
+        flow = flow.astype(dtype=np.float32)
+        example = as_tf_train_example(img1, img2, flow)
+        record_writer.write(example.SerializeToString())
+    record_writer.close()

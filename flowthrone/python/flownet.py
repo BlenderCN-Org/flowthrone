@@ -10,15 +10,17 @@ import warnings
 class FlowNetConfig:
     """ Configuration for instantiating/training FlowNet network. """
     # Weights applied to different layers (from high res to low res).
-    loss_weights = [0.25, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0]
+    loss_weights = [0.125, 0.125, 0.125, 0.125, 0.25, 0.25, 0.5, 0.5, 0.5, 0.5]
     # Weight applied to angular loss.
-    angular_loss_weight = 5.0
+    angular_loss_weight = 10
     # L2 regularization on the filters.
-    l2_scale = 1e-2
+    l2_scale = 5e-5
     # Whether the network should normalize images to be in [-1, 1].
     normalize_input = True
     # Whether batch norm should be used or not.
-    use_batch_norm = False
+    use_batch_norm = True
+    # Whether we should be chatty and print network layers at initialization.
+    verbose = True
 
 
 class FlowNet:
@@ -27,8 +29,8 @@ class FlowNet:
     akin to https://arxiv.org/abs/1504.06852 but somewhat smaller.
     USAGE:
 
-    >>> x1 = tf.placeholder(tf.float32, [None, 128, 128, 3], name='x1')
-    >>> x2 = tf.placeholder(tf.float32, [None, 128, 128, 3], name='x2')
+    >>> x1 = tf.placeholder(tf.uint8, [None, 128, 128, 3], name='x1')
+    >>> x2 = tf.placeholder(tf.uint8, [None, 128, 128, 3], name='x2')
     >>> flownet = FlowNet(x1, x2)
 
     Outputs of the network (at different scales) are accessible by:
@@ -66,13 +68,11 @@ class FlowNet:
     x1 = None
     x2 = None
 
-    # 0: 128x128, 1: 64x64, 2: 32x32, 3: 16x16, 4: 14x14, 5: 12x12, 6: 10x10
-    conv = [[]] * 7
-    # 0: 256x256, 1: 128x128, 2: 64x64, 3: 32x32, 4: 16x16, 5: 14x14, 6: 12x12
-    deconv = [[]] * 7
+    conv = [[]] * 9
+    deconv = [[]] * 9
 
     # Intermediate outputs.
-    predict = [[]] * 8
+    predict = [[]] * 10
 
     is_training = None
     config = None
@@ -86,9 +86,9 @@ class FlowNet:
         from tensorflow.contrib.layers import batch_norm
         # Should think how to generalize this a little bit, as it's getting
         # ridiculous otherwise.
-        if not x1.shape[1] == 256 or not x1.shape[2] == 256 or \
-           not x2.shape[1] == 256 or not x2.shape[2] == 256:
-            raise Exception('Input dimensions must be 256x256')
+        if not x1.shape[1] == 384 or not x1.shape[2] == 384 or \
+           not x2.shape[1] == 384 or not x2.shape[2] == 384:
+            raise Exception('Input dimensions must be 384x384')
 
         self.config = config
         self.config.use_batch_norm = is_training is not None
@@ -103,66 +103,90 @@ class FlowNet:
         x_concat = tf.concat([self.x1, self.x2], axis=3)
 
         # NOTE: These do not follow the scales used in the paper.
-        conv_outputs = [64, 64, 64, 64, 128, 256, 512, 512]
-        deconv_outputs = [128, 128, 128, 256, 256, 512, 512]
+        conv_outputs = [64, 128, 256, 256, 512, 512, 512, 1024, 1024]
+        kernel_sizes = [7, 5, 5, 3, 3, 3, 3, 3, 3]
+        strides = [2, 2, 2, 2, 1, 1, 1, 1, 1]
+        deconv_outputs = [128, 128, 128, 256, 256, 512, 512, 512, 512]
+        # For speed reasons.
+        conv_outputs = [c / 4 for c in conv_outputs]
+        deconv_outputs = [c / 4 for c in deconv_outputs]
+
+        assert len(conv_outputs) == len(kernel_sizes)
+        assert len(kernel_sizes) == len(strides)
         # Add convolutional layers
         index = 0
         self.conv[index] = self._add_conv2d_relu(
             x_concat,
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=2,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='SAME')
 
         index = 1
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=2,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='SAME')
 
         index = 2
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=2,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='SAME')
 
         index = 3
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=2,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='SAME')
 
         index = 4
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=1,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='VALID')
 
         index = 5
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=1,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='VALID')
 
         index = 6
         self.conv[index] = self._add_conv2d_relu(
             self.conv[index - 1],
             num_outputs=conv_outputs[index],
-            kernel_size=3,
-            stride=1,
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
             padding='VALID')
 
         index = 7
+        self.conv[index] = self._add_conv2d_relu(
+            self.conv[index - 1],
+            num_outputs=conv_outputs[index],
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
+            padding='VALID')
+
+        index = 8
+        self.conv[index] = self._add_conv2d_relu(
+            self.conv[index - 1],
+            num_outputs=conv_outputs[index],
+            kernel_size=kernel_sizes[index],
+            stride=strides[index],
+            padding='VALID')
+
+        index = 9
         self.predict[index] = conv2d(
             self.conv[index - 1],
             num_outputs=2,
@@ -172,8 +196,14 @@ class FlowNet:
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
 
-        # --------------------------- 10x10 -> 12x12 --------------------------
-        index = 6
+        if self.config.verbose:
+            print "Contracting layers:"
+            for i, c in enumerate(self.conv):
+                print i, c
+
+        ## print self.predict[index]
+
+        index = 8
         self.deconv[index] = self._add_con2d_transpose_relu(
             self.conv[index],
             num_outputs=deconv_outputs[index],
@@ -181,8 +211,42 @@ class FlowNet:
             stride=1,
             padding='VALID')
 
-        # --------------------------- 12x12 -> 14x14 --------------------------
+        concat = self._concat_conv_deconv_predict(index)
+        self.predict[index] = conv2d(
+            concat,
+            num_outputs=2,
+            kernel_size=3,
+            stride=1,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(self.config.l2_scale),
+            activation_fn=None)
+
+        index = 7
+        self.deconv[index] = self._add_con2d_transpose_relu(
+            concat,
+            num_outputs=deconv_outputs[index],
+            kernel_size=3,
+            stride=1,
+            padding='VALID')
+
+        concat = self._concat_conv_deconv_predict(index)
+        self.predict[index] = conv2d(
+            concat,
+            num_outputs=2,
+            kernel_size=1,
+            stride=1,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(self.config.l2_scale),
+            activation_fn=None)
+
         index = 6
+        self.deconv[index] = self._add_con2d_transpose_relu(
+            concat,
+            num_outputs=deconv_outputs[index],
+            kernel_size=3,
+            stride=1,
+            padding='VALID')
+
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
             concat,
@@ -192,32 +256,33 @@ class FlowNet:
             padding='SAME',
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
-            concat,
-            num_outputs=deconv_outputs[index - 1],
-            kernel_size=3,
-            stride=1,
-            padding='VALID')
 
-        # --------------------------- 14x14 -> 16x16 --------------------------
         index = 5
-        concat = self._concat_conv_deconv_predict(index)
-        self.predict[index] = conv2d(
+        self.deconv[index] = self._add_con2d_transpose_relu(
             concat,
-            num_outputs=2,
-            kernel_size=3,
-            stride=1,
-            padding='SAME',
-            weights_regularizer=l2_regularizer(self.config.l2_scale),
-            activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
-            concat,
-            num_outputs=deconv_outputs[index - 1],
+            num_outputs=deconv_outputs[index],
             kernel_size=3,
             stride=1,
             padding='VALID')
-        # --------------------------- 16x16 -> 32x32 --------------------------
+
+        concat = self._concat_conv_deconv_predict(index)
+        self.predict[index] = conv2d(
+            concat,
+            num_outputs=2,
+            kernel_size=3,
+            stride=1,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(self.config.l2_scale),
+            activation_fn=None)
+
         index = 4
+        self.deconv[index] = self._add_con2d_transpose_relu(
+            concat,
+            num_outputs=deconv_outputs[index],
+            kernel_size=3,
+            stride=1,
+            padding='VALID')
+
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
             concat,
@@ -227,15 +292,15 @@ class FlowNet:
             padding='SAME',
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
-            concat,
-            num_outputs=deconv_outputs[index - 1],
-            kernel_size=3,
-            stride=2,
-            padding='SAME')
 
-        # --------------------------- 32x32 -> 64x64 --------------------------
         index = 3
+        self.deconv[index] = self._add_con2d_transpose_relu(
+            concat,
+            num_outputs=deconv_outputs[index],
+            kernel_size=3,
+            stride=2,
+            padding='SAME')
+
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
             concat,
@@ -245,33 +310,15 @@ class FlowNet:
             padding='SAME',
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
-            concat,
-            num_outputs=deconv_outputs[index - 1],
-            kernel_size=3,
-            stride=2,
-            padding='SAME')
 
-        # -------------------------- 64x64 -> 128x128 -------------------------
         index = 2
-        concat = self._concat_conv_deconv_predict(index)
-        self.predict[index] = conv2d(
+        self.deconv[index] = self._add_con2d_transpose_relu(
             concat,
-            num_outputs=2,
-            kernel_size=3,
-            stride=1,
-            padding='SAME',
-            weights_regularizer=l2_regularizer(self.config.l2_scale),
-            activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
-            concat,
-            num_outputs=deconv_outputs[index - 1],
+            num_outputs=deconv_outputs[index],
             kernel_size=3,
             stride=2,
             padding='SAME')
 
-        # -------------------------- 128x128 -> 256x256 -------------------------
-        index = 1
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
             concat,
@@ -281,9 +328,29 @@ class FlowNet:
             padding='SAME',
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
-        self.deconv[index - 1] = self._add_con2d_transpose_relu(
+
+        index = 1
+        self.deconv[index] = self._add_con2d_transpose_relu(
             concat,
-            num_outputs=deconv_outputs[index - 1],
+            num_outputs=deconv_outputs[index],
+            kernel_size=3,
+            stride=2,
+            padding='SAME')
+
+        concat = self._concat_conv_deconv_predict(index)
+        self.predict[index] = conv2d(
+            concat,
+            num_outputs=2,
+            kernel_size=3,
+            stride=1,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(self.config.l2_scale),
+            activation_fn=None)
+
+        index = 0
+        self.deconv[index] = self._add_con2d_transpose_relu(
+            concat,
+            num_outputs=deconv_outputs[index],
             kernel_size=3,
             stride=2,
             padding='SAME')
@@ -305,7 +372,21 @@ class FlowNet:
                                                    layer.shape[2])
             self.predictions.append(tf.identity(layer, name=layer_name))
 
+        if self.config.verbose:
+            print "Expanding layers:"
+            for i, c in enumerate(self.deconv):
+                print i, c
+
+            print "Prediction layers:"
+            for i, c in enumerate(self.predict):
+                print i, c
+
     def _concat_conv_deconv_predict(self, index):
+        if self.config.verbose:
+            print "concat conv deconv at {}".format(index)
+            print self.conv[index - 1]
+            print self.deconv[index]
+            print self.predict[index + 1]
         return self._concat_inputs(self.conv[index - 1], self.deconv[index],
                                    self.predict[index + 1])
 
@@ -419,6 +500,7 @@ class FlowNet:
         Optical flow prediction is 'resampled' as necessary (i.e. resized and
         values are rescaled).
         """
+        assert prediction.shape[3] == 2
         imsize = [conv.shape[1], conv.shape[2]]
         prediction_resized = resample_flow(prediction, imsize)
         assert conv.shape[1] == deconv.shape[1] and \
