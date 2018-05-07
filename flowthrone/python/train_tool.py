@@ -4,46 +4,42 @@ import sys
 import cv2
 import utils
 from utils import compute_flow_color
-from dataset_utils import Dataset, DataFeeder
 import tensorflow as tf
 from tensorflow.python.client import timeline
 import numpy as np
-import shutil
 import time
-from tf_utils import resample_flow, angular_flow_error
 from flownet import FlowNet, FlowNetConfig
 from training_manager import TrainingManager, \
         get_visualization_summary, variable_summary
 
-DATASET_PATH = os.path.join(os.environ['HOME'], 'data',
-                            'flying_chairs_384x384')
 # Configuration used to run the training task.
 config = {
-    # How many examples to hold in memory
-    'num_train': 3500,
-    'num_test': 200,
     'num_iterations': 1000000,
-    'batch_size': 28,
-    'learning_rate': 1e-3,
+    'batch_size': 12,
+    'learning_rate': 1e-4,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
     'momentum': 0.95,
     'image_size': 384,
+    # Whether to augment training set.
+    'augment_by_flips': True,
+    'augment_by_brightness_contrast': True,
+    'augment_by_transpose': True,
     # Path to the directory with images/groundtruth flow.
     'input_tf_records_train': '/data/flying_chairs_384x384_train.tfrecords',
     'input_tf_records_test': '/data/flying_chairs_384x384_test.tfrecords',
     'shuffle': False,
     # How often to save model/checkpoint.
-    'save_model_iter': 5000,
+    'save_model_iter': 1000000,
     'save_checkpoint_iter': 10000,
-    'test_batch_iter': 500,  # how often to evaluate on a test batch
+    'test_batch_iter': 100,  # how often to evaluate on a test batch
     'visualization_iter': 1000,  # how often to save images
     'print_iter': 10,  # how often to print stuff
 
     # Experiment results will be written to:
     #   base_path/exp_name/{checkpoints, models}
     'base_path': '/persistent-tmp/',
-    'exp_name': 'flownet384x384v7',
+    'exp_name': 'flownet384x384v8',
     # Wipe any data in the provided path (destroying any previous results),
     # and start anew.
     'fresh_start': False,
@@ -53,15 +49,19 @@ manager = TrainingManager(config)
 
 imsize = config['image_size']
 # Placeholders for input images.
-
-iterator = tf.data.Iterator.from_structure(manager.dataset_train.output_types,
-                                           manager.dataset_test.output_shapes)
-train_init_op = iterator.make_initializer(manager.dataset_train)
-test_init_op = iterator.make_initializer(manager.dataset_test)
+handle = tf.placeholder(tf.string, shape=[])
+iterator = tf.data.Iterator.from_string_handle(
+            handle, manager.dataset_train.output_types, manager.dataset_train.output_shapes)
 x1, x2, y = iterator.get_next()
 
+train_iterator = manager.dataset_train.make_one_shot_iterator()
+test_iterator = manager.dataset_test.make_one_shot_iterator()
+
 flownet_config = FlowNetConfig()
-is_training = tf.placeholder(tf.bool, name='is_training')
+#x1 = tf.placeholder(tf.uint8, [None, imsize, imsize, 3], name='x1')
+#x2 = tf.placeholder(tf.uint8, [None, imsize, imsize, 3], name='x2')
+#is_training = tf.placeholder(tf.bool, name='is_training')
+is_training = tf.Variable(True, dtype=tf.bool, name='is_training')
 flownet = FlowNet(x1, x2, is_training=is_training, config=flownet_config)
 prediction = tf.identity(flownet.predictions[0], name='prediction')
 
@@ -71,6 +71,13 @@ session_config = tf.ConfigProto()
 #session_config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
 
 with tf.Session(config=session_config) as sess:
+    manager.restore_from_last_checkpoint_if_possible(sess)
+    
+    # The `Iterator.string_handle()` method returns a tensor that can be
+    # evaluated and used to feed the `handle` placeholder.
+    train_itr_handle = sess.run(train_iterator.string_handle())
+    test_itr_handle = sess.run(test_iterator.string_handle())
+
     # Setup loss for training and the optimizer.
     flownet.set_endpoint_error_loss(y)
     flownet.set_angular_error_loss(y)
@@ -91,9 +98,6 @@ with tf.Session(config=session_config) as sess:
     manager.setup_test_writer(sess)
     merged = tf.summary.merge_all()
 
-    # Initialize the training iterrator
-    sess.run(train_init_op)
-
     # Actually start training.
     for iter in range(tf_iteration.eval(sess), config['num_iterations']):
         if manager.sigint_happened:
@@ -105,7 +109,7 @@ with tf.Session(config=session_config) as sess:
         t_start = time.time()
         summary, _, avg_train_loss = sess.run(
             [merged, optimizer, loss],
-            feed_dict={is_training: True},
+            feed_dict={is_training: True, handle: train_itr_handle},
             options=manager.run_options,
             run_metadata=manager.run_metadata)
         t_end = time.time()
@@ -121,19 +125,15 @@ with tf.Session(config=session_config) as sess:
 
         # Run on a batch from validation set.
         if iter % config['test_batch_iter'] == 0:
-            # This is not super great -- always initializes at the beginning
-            # of the dataset.
-            print "Switching to test iterator.."
-            sess.run(test_init_op)
+            t_start = time.time()
             summary, _ = sess.run([merged, loss],
-                                  feed_dict={is_training: False})
+                    feed_dict={is_training: False, handle: test_itr_handle})
             manager.add_test_writer_summary(summary, iter)
             # Add summaries for results at the three finest scales.
             if iter % config['visualization_iter'] == 0:
-                sess.run(test_init_op)
                 num = 10
                 y_test, y_pred_tests = sess.run([y, flownet.predictions[0:3]],
-                                                feed_dict={is_training: False})
+                        feed_dict={is_training: False, handle: test_itr_handle})
                 for y_pred_test in y_pred_tests:
                     name = 'visualization-{}x{}'.format(y_pred_test.shape[1],
                                                         y_pred_test.shape[2])
@@ -143,8 +143,8 @@ with tf.Session(config=session_config) as sess:
                         y_test[0:num],
                         summary_name=name)
                     manager.add_test_writer_summary(image_summary, iter)
-            print "Switching to train iterator..."
-            sess.run(train_init_op)
+            t_end = time.time()
+            print "Test iteration took {:.4f} sec".format(t_end - t_start)
 
         # Save model/checkpoint if the time is appropriate.
         manager.maybe_save_model(sess, iter)

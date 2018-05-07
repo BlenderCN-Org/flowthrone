@@ -44,8 +44,8 @@ def main(args):
         img1 = img1.astype(dtype=np.uint8)
         img2 = img2.astype(dtype=np.uint8)
         flow = flow.astype(dtype=np.float32)
-        example = dataset_utils.as_tf_train_example(img1, img2, flow)
-        record_writer.write(example.SerializeToString())
+        example = dataset_utils.as_tf_example(img1, img2, flow)
+        record_writer.write(example)
 
 
 def parse_args():

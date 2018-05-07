@@ -108,8 +108,8 @@ class FlowNet:
         strides = [2, 2, 2, 2, 1, 1, 1, 1, 1]
         deconv_outputs = [128, 128, 128, 256, 256, 512, 512, 512, 512]
         # For speed reasons.
-        conv_outputs = [c / 4 for c in conv_outputs]
-        deconv_outputs = [c / 4 for c in deconv_outputs]
+        #conv_outputs = [c / 4 for c in conv_outputs]
+        #deconv_outputs = [c / 4 for c in deconv_outputs]
 
         assert len(conv_outputs) == len(kernel_sizes)
         assert len(kernel_sizes) == len(strides)

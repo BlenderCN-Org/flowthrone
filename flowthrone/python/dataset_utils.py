@@ -4,177 +4,7 @@ import os
 import utils
 import random
 import numpy as np
-
-
-class DataFeeder:
-    """
-    Helper class for loading flow triplets (image pair, flow), and providing
-    them as 'batches'.
-    USAGE:
-        >>> feeder = DataFeeder(triplet_files, image_size=64, batch_size=16)
-
-    The argument `triplet_files` is a list of length-3 lists, where each 3-list
-    contains a path to an image pair, and a path to the .flo groundtruth.
-    [ ['/path/to/00000_flow1.flo',
-       '/path/to/00000_img1.jpg',
-       '/path/to/00000_img2.jpg'],
-      ['/path/to/00001_flow1.flo',
-       '/path/to/00001_img1.jpg',
-       '/path/to/00001_img2.jpg'],
-      ...
-    ]
-    Next batch can be obtained like so:
-        >>> images1, images2, flows, weights = feeder.next_batch()
-
-    Weights are binary masks -- '0' wherever flow field had NaNs
-    (i.e. at occluded regions), and '1' otherwise. If your flow groundtruth does
-    not have annotations for occluded regions, you may omit weights entirely.
-    """
-    _image_size = None
-    _files = []
-    _cur_idx = 0
-    _batch_size = 1
-
-    _I1s = []
-    _I2s = []
-    _flos = []
-    _weights = []
-
-    def __init__(self,
-                 files,
-                 image_size=64,
-                 batch_size=1,
-                 max_examples_to_use=None):
-        """Args:
-            files: List of 3-tuples, each containing paths to flow groundtruth
-                   and a corresponding image pair.
-            image_size: Target size of the returned square image patches.
-            batch_size: Number of tuples to return on each call of `next_batch`.
-        """
-        self._files = files
-        if max_examples_to_use is not None:
-            print ("Asked to use {} out of {} examples. Will shuffle and "
-                   "clip the dataset.".format(\
-                    max_examples_to_use, len(self._files)))
-            random.shuffle(self._files)
-            self._files = self._files[0:max_examples_to_use]
-
-        self._batch_size = batch_size
-        self._image_size = image_size
-        self._load_all()
-        # After the files are loaded, shuffle them once.
-        self._maybe_shuffle_dataset(p=1.0)
-
-    def _maybe_shuffle_dataset(self, p):
-        """Rolls a die and shuffles the loaded dataset."""
-        if np.random.uniform(0, 1) <= p:
-            print "Shuffling the dataset."
-            self.shuffle()
-
-    def shuffle(self):
-        """Shuffles the dataset.
-        This ensures that the same entries do not appear in the same batch
-        over and over, on multiple iterations through the dataset.
-        """
-        idx = range(len(self._files))
-        np.random.shuffle(idx)
-        assert len(self._files) == len(self._I1s)
-        assert len(self._I1s) == len(self._I2s)
-        assert len(self._I2s) == len(self._flos)
-        assert len(self._flos) == len(self._weights)
-
-        self._files = [self._files[i] for i in idx]
-        self._I1s = [self._I1s[i] for i in idx]
-        self._I2s = [self._I2s[i] for i in idx]
-        self._flos = [self._flos[i] for i in idx]
-        self._weights = [self._weights[i] for i in idx]
-
-    def next_batch(self):
-        """Returns a collection of images at t, images at t+1, flow fields,
-           and weights. Weights are binary masks that are 'zero' at occluded
-           regions, and are 'one' otherwise.
-        """
-        # 1/ number of iterations to go over dataset.
-        shuffle_prob = float(self._batch_size) / len(self._files)
-        self._maybe_shuffle_dataset(shuffle_prob)
-
-        n = len(self._I1s)
-        idx = range(self._cur_idx, self._cur_idx + self._batch_size)
-        idx = np.mod(idx, n)
-        self._cur_idx = (idx[-1] + 1) % n
-
-        return zip(* [[
-            self._I1s[i], self._I2s[i], self._flos[i], self._weights[i]
-        ] for i in idx])
-
-        ##pts = []
-        ##for i in idx:
-        ##    I1 = self._I1s[i]
-        ##    I2 = self._I2s[i]
-        ##    uv = self._flos[i]
-        ##    triplet = [uv, I1, I2]
-        ##    triplet = generate_example_triplet_flip(triplet, \
-        ##            flip_x=random.randint(0, 1), flip_y=random.randint(0, 1))
-        ##    pts.append([triplet[1], triplet[2], triplet[0], self._weights[i]])
-        ##return zip(*pts)
-
-    def _load_all(self):
-        self._I1s = []
-        self._I2s = []
-        self._flos = []
-        self._weights = []
-
-        target_size = (self._image_size, self._image_size)
-        files = []
-        for idx, f in enumerate(self._files):
-            print "Loading {}/{}: {}".format(idx, len(self._files), f)
-            I1, I2, flo = self._load_triple(f, normalize=False)
-            if I1 is None or I2 is None or len(I1.shape) == 0 or len(
-                    I2.shape) == 0:
-                print "Encountered invalid triple, skipping: ", f
-                continue
-                # TODO: this create inconsistency between self.files length and
-                # I1/I2 length.
-            if self._image_size is not I1.shape[0]:
-                I1 = cv2.resize(I1, target_size)
-                I2 = cv2.resize(I2, target_size)
-                # BAD!!! DO NOT DO THIS!!!
-                orig_width = flo.shape[1]
-                orig_height = flo.shape[0]
-                flo[:, :, 0] *= target_size[0] / orig_height
-                flo[:, :, 1] *= target_size[1] / orig_width
-                flo = cv2.resize(flo, target_size)
-
-            # Set weights to be 1 - occlusion mask.
-            weights = np.ones([I1.shape[0], I1.shape[1], 2])
-            weights[np.isnan(flo)] = 0.0
-            # Zero out invalid pixels.
-            flo[np.isnan(flo)] = 0.0
-
-            flip_x = random.randint(0, 1)
-            flip_y = random.randint(0, 1)
-            print "Flipping: {} {}".format(flip_x, flip_y)
-            flo, I1, I2 = generate_example_triplet_flip([flo, I1, I2], flip_x,
-                                                        flip_y)
-
-            self._I1s.append(I1)
-            self._I2s.append(I2)
-            self._flos.append(flo)
-            self._weights.append(weights)
-            files.append(f)
-        self._files = files
-
-    def _load_triple(self, fn_triplet, normalize):
-        flo = np.asarray(utils.read_flo(fn_triplet[0]), dtype='float32')
-        #I1 = np.asarray(cv2.imread(fn_triplet[1]), dtype='float32')
-        #I2 = np.asarray(cv2.imread(fn_triplet[2]), dtype='float32')
-        I1 = cv2.imread(fn_triplet[1])
-        I2 = cv2.imread(fn_triplet[2])
-        if normalize:
-            assert False
-            I1 = (I1 - 128.0) / 128.0
-            I2 = (I2 - 128.0) / 128.0
-        return (I1, I2, flo)
+import tensorflow as tf
 
 
 class Dataset:
@@ -229,10 +59,10 @@ class Dataset:
                                  f.replace(self._FLOW_MATCHER, self._IMG1_FN))
             i2_fn = os.path.join(dataset_path,
                                  f.replace(self._FLOW_MATCHER, self._IMG2_FN))
-            #try:
-            Dataset._check_files_exist(flo_fn, i1_fn, i2_fn)
-            #except:
-            #    continue
+            try:
+                Dataset._check_files_exist(flo_fn, i1_fn, i2_fn)
+            except:
+                continue
 
             if i % num_splits == 0:
                 self._val_file_list.append([flo_fn, i1_fn, i2_fn])
@@ -362,18 +192,15 @@ def generate_example_triplet_brightness(triplet, alpha=1.0, beta=0.0):
 
 
 def _bytes_feature(value):
-    import tensorflow as tf
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
 def _float_feature(value):
-    import tensorflow as tf
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
-def as_tf_train_example(x1, x2, flow):
-    """ Returns triplet as tf.train.Example instance. """
-    import tensorflow as tf
+def as_tf_example(x1, x2, flow):
+    """ Returns triplet as a binary serialization of tf.train.Example. """
     assert x1.dtype == np.uint8
     assert x2.dtype == np.uint8
     assert flow.dtype == np.float32
@@ -383,14 +210,14 @@ def as_tf_train_example(x1, x2, flow):
         'x2': _bytes_feature(x2.tostring()),
         'y': _bytes_feature(flow.tostring()),
     })
-    return tf.train.Example(features=features)
+    return tf.train.Example(features=features).SerializeToString()
 
 
 def decode_tf_example(serialized_example, imsize):
     """ Parses image pair and groundtruth flow from the given
         `serialized_example`. Returns x1, x2, y (pair of images, followed by
         optical flow. """
-    import tensorflow as tf
+
     features = tf.parse_single_example(
         serialized_example,
         features={
@@ -414,10 +241,98 @@ def decode_tf_example(serialized_example, imsize):
     return x1, x2, y
 
 
+def _flip_tf_example_left_right(x1, x2, y):
+    x1 = tf.image.flip_left_right(x1)
+    x2 = tf.image.flip_left_right(x2)
+    y = tf.image.flip_left_right(y)
+    # Negate flow along x. Is there really not a better way?
+    wx, wy = tf.split(y, 2, axis=-1)
+    wx = tf.multiply(wx, -1)
+    y = tf.concat([wx, wy], axis=-1)
+    return x1, x2, y
+
+
+def _flip_tf_example_up_down(x1, x2, y):
+    x1 = tf.image.flip_up_down(x1)
+    x2 = tf.image.flip_up_down(x2)
+    y = tf.image.flip_up_down(y)
+    # Negate flow along x. Is there really not a better way?
+    wx, wy = tf.split(y, 2, axis=-1)
+    wy = tf.multiply(wy, -1)
+    y = tf.concat([wx, wy], axis=-1)
+    return x1, x2, y
+
+
+def _identity(x1, x2, y):
+    return x1, x2, y
+
+
+def maybe_flip_tf_example(x1, x2, y, func, seed=0):
+    """ Maybe flips and returns a given triplet, or maybe doesn't flip. """
+    assert y.shape[-1] == 2
+    flip_x = tf.less(tf.random_uniform([], 0, 1.0, seed=seed), 0.5)
+    return tf.cond(
+        flip_x,
+        true_fn=lambda: func(x1, x2, y),
+        false_fn=lambda: _identity(x1, x2, y))
+
+
+def adjust_tf_example_brightness_contrast(x1,
+                                          x2,
+                                          y,
+                                          contrast=[0.75, 1.25],
+                                          brightness=[-0.125, 0.125],
+                                          seed=0):
+    """ Adjusts brightness/contrast of both images by a uniformly chosen
+        amount, and leaves flow field untouched. """
+    c = tf.random_uniform([], contrast[0], contrast[1], seed=seed)
+    b = tf.random_uniform([], brightness[0], brightness[1], seed=seed)
+    x1 = tf.image.adjust_brightness(
+        tf.image.adjust_contrast(
+            x1, contrast_factor=c), delta=b)
+    x2 = tf.image.adjust_brightness(
+        tf.image.adjust_contrast(
+            x2, contrast_factor=c), delta=b)
+    return x1, x2, y
+
+
+def transpose_tf_example(x1, x2, y):
+    """ Transposes x and y dimensions of the example, i.e.
+        image1_out(x, y) = image1_in(y, x)
+        image2_out(x, y) = image2_in(y, x)
+        [flow_x(x, y), flow_y(x, y)] = [flow_y(y, x), flow_x(y, x)]
+    """
+    x1_t = tf.image.transpose_image(x1)
+    x2_t = tf.image.transpose_image(x2)
+    y_t = tf.image.transpose_image(y)
+    wx, wy = tf.split(y_t, 2, axis=-1)
+    y_t = tf.concat([wy, wx], axis=-1)
+    return x1_t, x2_t, y_t
+
+
+def maybe_transpose_tf_example(x1, x2, y, seed=0):
+    """ Maybe transposes a given triplet, or maybe doesn't """
+    assert y.shape[-1] == 2
+    should_transpose = tf.less(tf.random_uniform([], 0, 1.0, seed=seed), 0.5)
+    return tf.cond(
+        should_transpose,
+        true_fn=lambda: transpose_tf_example(x1, x2, y),
+        false_fn=lambda: _identity(x1, x2, y))
+
+
+def maybe_flip_tf_example_left_right(x1, x2, y, seed=0):
+    """ Maybe flips and returns a given triplet, or maybe doesn't flip. """
+    return maybe_flip_tf_example(x1, x2, y, _flip_tf_example_left_right, seed)
+
+
+def maybe_flip_tf_example_up_down(x1, x2, y, seed=0):
+    """ Maybe flips and returns a given triplet, or maybe doesn't flip. """
+    return maybe_flip_tf_example(x1, x2, y, _flip_tf_example_up_down, seed)
+
+
 def write_tf_records_dataset(input_files_list, output_filename):
     """ Given a list of [flow, img1, img2] filename tuples, writes a
         TFRecordWriter file """
-    import tensorflow as tf
 
     for flow_fn, img1_fn, img2_fn in input_files_list:
         print "Wrote triplet from file: ", os.path.basename(flow_fn)

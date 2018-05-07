@@ -1,7 +1,6 @@
 import os
 import sys
 from utils import compute_flow_color, resample_flow
-from dataset_utils import Dataset, DataFeeder
 import dataset_utils
 import tensorflow as tf
 import numpy as np
@@ -56,16 +55,39 @@ class TrainingManager:
 
         self.dataset_train = self.dataset_train.map(
             lambda x: dataset_utils.decode_tf_example(x, config['image_size']))
-        self.dataset_train = self.dataset_train.batch(
-            config['batch_size']).repeat()
+        self.dataset_train = self.dataset_train.batch(config['batch_size'])
+        if config['augment_by_flips']:
+            self.dataset_train = self.dataset_train.map(
+                lambda x1, x2, y: dataset_utils.maybe_flip_tf_example_left_right(x1, x2, y),
+                num_parallel_calls=config['batch_size'])
+            self.dataset_train = self.dataset_train.map(
+                lambda x1, x2, y: dataset_utils.maybe_flip_tf_example_up_down(x1, x2, y),
+                num_parallel_calls=config['batch_size'])
+        if config['augment_by_brightness_contrast']:
+            self.dataset_train = self.dataset_train.map(
+                lambda x1, x2, y: dataset_utils.adjust_tf_example_brightness_contrast(
+                    x1, x2, y, contrast=[0.5, 1.5], brightness=[-0.125, 0.125]),
+                num_parallel_calls=config['batch_size'])
+        if config['augment_by_transpose']:
+            self.dataset_train = self.dataset_train.map(
+                lambda x1, x2, y: dataset_utils.maybe_transpose_tf_example(x1, x2, y),
+                num_parallel_calls=config['batch_size'])
+
+        self.dataset_train = self.dataset_train.repeat()
+        self.dataset_train = self.dataset_train.prefetch(config['batch_size'])
+        # set up test dataset.
         self.dataset_test = self.dataset_test.map(
             lambda x: dataset_utils.decode_tf_example(x, config['image_size']))
         self.dataset_test = self.dataset_test.batch(
-            config['batch_size']).repeat()
+            config['batch_size']).repeat().prefetch(config['batch_size'])
+
         if config['shuffle']:
+            print "Going to shuffle!"
             shuffle_buffer = 4
-            self.dataset.train = self.dataset.train.shuffle(shuffle_buffer)
-            self.dataset.test = self.dataset.test.shuffle(shuffle_buffer)
+            self.dataset_train = self.dataset_train.shuffle(
+                shuffle_buffer, reshuffle_each_iteration=True)
+            self.dataset_test = self.dataset_test.shuffle(
+                shuffle_buffer, reshuffle_each_iteration=True)
 
         signal.signal(signal.SIGINT, self._sigint_handler)
 

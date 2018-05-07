@@ -12,7 +12,12 @@ def read_flo(filename):
     height = struct.unpack('i', fid.read(4))[0]
     n = width * height * 2
     data = struct.unpack('f' * n, fid.read(4 * n))
-    return np.reshape(data, [height, width, 2])
+    data = np.reshape(data, [height, width, 2])
+    # TODO: different datasets have different conventions for labeling occluded
+    # pixels in the optical flow groundtruth. The little hack below works for
+    # middlebury, but is a bit unorthodox.
+    data[np.where(np.abs(data) > 1e9)] = 0.0
+    return data
 
 
 def write_flo(filename, flow):
