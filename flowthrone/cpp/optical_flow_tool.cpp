@@ -44,6 +44,8 @@ DEFINE_double(scale, 0.5,
               "rescaled, prior to the optical flow call.");
 DEFINE_int32(skip_frames, 0,
              "Number of frames to skip from the beginning of the video.");
+DEFINE_int32(fps, 30, "Frame rate of output video (if applicable)");
+
 namespace flowthrone {
 
 // Abstraction over a pair of images, or a video sequence.
@@ -76,9 +78,8 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<cv::VideoWriter> video_writer;
   if (!FLAGS_output.empty() && !FLAGS_video.empty()) {
-    int fps = 30;
     cv::Size sz(images[1].cols * 2, images[1].rows);
-    video_writer = OpenVideo(FLAGS_output, sz, fps);
+    video_writer = OpenVideo(FLAGS_output, sz, FLAGS_fps);
   }
 
   // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
