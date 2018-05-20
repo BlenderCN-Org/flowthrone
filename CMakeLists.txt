@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 project(flowthrone)
 
-# If you have a relatively old (like: pre 5.2 version of gcc, you probably
+# If you have a relatively old (like: pre 5.2) version of gcc, you probably
 # have to change this to std=c++11.
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fPIC")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fPIC")
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -fopenmp")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
