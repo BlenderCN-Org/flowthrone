@@ -5,5 +5,9 @@ build/*
 *.sh
 *.pyc
 *.swp
+*.swn
+*.swo
 webserver/flowthrone_pb2.py
 webserver/uploads/*
+*_pb2.py
+
