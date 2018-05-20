@@ -1,7 +1,7 @@
 #include "optical_flow_model.h"
 #include "flowthrone.pb.h"
-#include "optical_flow_tf_model.h"
 #include "io.h"
+#include "optical_flow_tf_model.h"
 
 namespace flowthrone {
 

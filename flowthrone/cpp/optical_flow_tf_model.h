@@ -48,7 +48,7 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   OpticalFlowTensorFlowModel(const OpticalFlowTensorFlowModelOptions& opt);
   virtual ~OpticalFlowTensorFlowModel();
 
-  bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow) override;
+  Result Run(const cv::Mat& I0, const cv::Mat& I1) override;
 
  private:
   void InitializeFromSavedModel(const std::string& export_dir,

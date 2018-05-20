@@ -1,13 +1,19 @@
 #pragma once
-#include "opencv2/core/core.hpp"
 #include "google/protobuf/message.h"
+#include "opencv2/core/core.hpp"
 
 namespace flowthrone {
 
 // Interface that the optical flow algorithm should implement.
 class OpticalFlowModel {
  public:
-  virtual bool Run(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow) = 0;
+  // Structure containing result of a single call to OpticaFlowModel::Run.
+  struct Result {
+    cv::Mat flow;
+    bool success;
+  };
+
+  virtual Result Run(const cv::Mat& I0, const cv::Mat& I1) = 0;
 
   // Instantiates the derived class from the configuration proto.
   static std::unique_ptr<OpticalFlowModel> Create(

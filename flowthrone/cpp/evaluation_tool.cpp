@@ -1,15 +1,15 @@
 // Binary can be used to evaluate optical flow on a collection of images.
-#include <cstdlib>
-#include <chrono>
-#include <boost/filesystem.hpp>
+#include "evaluation.h"
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <boost/filesystem.hpp>
+#include <chrono>
+#include <cstdlib>
 #include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include "evaluation.h"
-#include "io.h"
+#include <opencv2/imgproc/imgproc.hpp>
 #include "flowthrone.pb.h"
+#include "io.h"
 #include "optical_flow_model.h"
 #include "visualization.h"
 
@@ -82,10 +82,11 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Running on: " << datum.identifier() << " " << i << "/"
               << evaluation_config.datum_size();
 
-    cv::Mat I0, I1, flow_gt, predicted_flow;
+    cv::Mat I0, I1, flow_gt;
     LoadTriplet(datum, &I0, &I1, &flow_gt);
     auto t1 = high_resolution_clock::now();
-    solver->Run(I0, I1, &predicted_flow);
+    auto solver_result = solver->Run(I0, I1);
+    cv::Mat predicted_flow = solver_result.flow;
     auto t2 = high_resolution_clock::now();
     float elapsed = float(duration_cast<nanoseconds>(t2 - t1).count()) / 1e9;
 

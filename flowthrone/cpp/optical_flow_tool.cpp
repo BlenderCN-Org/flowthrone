@@ -101,8 +101,8 @@ int main(int argc, char** argv) {
     }
 
     LOG(INFO) << "Computing flow.";
-    cv::Mat predicted_flow;
-    model->Run(images[0], images[1], &predicted_flow);
+    auto result = model->Run(images[0], images[1]);
+    cv::Mat predicted_flow = result.flow;
 
     // Visualizations/output.
     cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
