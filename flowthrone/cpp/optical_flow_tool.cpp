@@ -45,7 +45,10 @@ DEFINE_double(scale, 0.5,
 DEFINE_int32(skip_frames, 0,
              "Number of frames to skip from the beginning of the video.");
 DEFINE_int32(fps, 30, "Frame rate of output video (if applicable)");
-
+DEFINE_double(vis_least_flow_magnitude, 0.0f,
+              "Controls optical flow visualization. Smaller values will "
+              "produce more intense and more 'frame-by-frame' like visuals; "
+              "larger values will look smoother across time.");
 namespace flowthrone {
 
 // Abstraction over a pair of images, or a video sequence.
@@ -82,13 +85,18 @@ int main(int argc, char** argv) {
     video_writer = OpenVideo(FLAGS_output, sz, FLAGS_fps);
   }
 
-  // Install SIGINT handler -- this allows us to cleanly exit the loop (even if
+  // Install SIGINT handler -- this allows us to cleanly exit the loop (even
+  // if
   // we do not complete all frames).
   flowthrone::InstallSigIntHandler();
+
+  VisTupleOptions vis_opts;
+  vis_opts.least_max_flow_mag = FLAGS_vis_least_flow_magnitude;
   int frame_index = -1;
   while (true) {
     frame_index++;
-    // Push the old image to the 'back' of the queue, and fill in latest image.
+    // Push the old image to the 'back' of the queue, and fill in latest
+    // image.
     std::swap(images[0], images[1]);
     images[1] = cv::Mat();
 
@@ -105,7 +113,8 @@ int main(int argc, char** argv) {
     cv::Mat predicted_flow = result.flow;
 
     // Visualizations/output.
-    cv::Mat vis = VisualizeTuple(images[0], images[1], predicted_flow);
+    cv::Mat vis =
+        VisualizeTuple(images[0], images[1], predicted_flow, vis_opts);
     if (FLAGS_visualize) {
       if (FLAGS_more) {
         // Show warped points in the two images.
@@ -195,9 +204,11 @@ std::unique_ptr<Feeder> Feeder::Create() {
     return std::unique_ptr<Feeder>(new ImageFeeder);
   } else {
     LOG(FATAL)
-        << "You must either specify the video filename (--video) or a pair of "
+        << "You must either specify the video filename (--video) or a pair "
+           "of "
            "images (--img1, --img2) that should be processed. "
-           "It is not acceptable to specify both --video and --img1/--img2 or "
+           "It is not acceptable to specify both --video and --img1/--img2 "
+           "or "
            "neither.\n"
            "For help, consider running './optical_flow_main --helpshort ";
     return nullptr;
