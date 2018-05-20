@@ -10,12 +10,12 @@ import numpy as np
 import time
 from flownet import FlowNet, FlowNetConfig
 from training_manager import TrainingManager, \
-        get_visualization_summary, variable_summary
+        get_visualization_summary
 
 # Configuration used to run the training task.
 config = {
     'num_iterations': 1000000,
-    'batch_size': 12,
+    'batch_size': 10,
     'learning_rate': 1e-4,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
@@ -87,8 +87,6 @@ with tf.Session(config=session_config) as sess:
     optimizer = manager.get_optimizer(loss)
     tf_iteration = tf.Variable(0, name='iteration_counter')
 
-    with tf.name_scope('summary_prediction'):
-        variable_summary(flownet.predictions[0])
     for var in [x1, x2, y, flownet.predictions[0]]:
         tf.add_to_collection('vars', var)
     tf.summary.scalar('learning_rate', manager.learning_rate)

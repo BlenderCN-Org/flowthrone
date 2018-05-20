@@ -260,3 +260,7 @@ def variable_summary(var):
         tf.summary.scalar('mean', tf.reduce_mean(var))
         tf.summary.scalar('max', tf.reduce_max(var))
         tf.summary.scalar('min', tf.reduce_min(var))
+        frac_nonzero = tf.cast(
+            tf.count_nonzero(var), dtype=tf.float32) / tf.cast(
+                tf.size(var), dtype=tf.float32)
+        tf.summary.scalar('nnz', frac_nonzero)

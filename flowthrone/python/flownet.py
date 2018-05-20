@@ -4,6 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
 from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error, l2_warp_error
+from training_manager import variable_summary
 import warnings
 
 
@@ -121,6 +122,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='SAME')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 1
         self.conv[index] = self._add_conv2d_relu(
@@ -129,6 +132,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='SAME')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 2
         self.conv[index] = self._add_conv2d_relu(
@@ -137,6 +142,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='SAME')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 3
         self.conv[index] = self._add_conv2d_relu(
@@ -145,6 +152,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='SAME')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 4
         self.conv[index] = self._add_conv2d_relu(
@@ -153,6 +162,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='VALID')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 5
         self.conv[index] = self._add_conv2d_relu(
@@ -161,6 +172,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='VALID')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 6
         self.conv[index] = self._add_conv2d_relu(
@@ -169,6 +182,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='VALID')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 7
         self.conv[index] = self._add_conv2d_relu(
@@ -177,6 +192,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='VALID')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 8
         self.conv[index] = self._add_conv2d_relu(
@@ -185,6 +202,8 @@ class FlowNet:
             kernel_size=kernel_sizes[index],
             stride=strides[index],
             padding='VALID')
+        with tf.name_scope('summary_conv{}'.format(index)):
+            variable_summary(self.conv[index])
 
         index = 9
         self.predict[index] = conv2d(
@@ -210,6 +229,8 @@ class FlowNet:
             kernel_size=3,
             stride=1,
             padding='VALID')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -228,6 +249,8 @@ class FlowNet:
             kernel_size=3,
             stride=1,
             padding='VALID')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -246,6 +269,8 @@ class FlowNet:
             kernel_size=3,
             stride=1,
             padding='VALID')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -264,6 +289,8 @@ class FlowNet:
             kernel_size=3,
             stride=1,
             padding='VALID')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -282,6 +309,8 @@ class FlowNet:
             kernel_size=3,
             stride=1,
             padding='VALID')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -300,6 +329,8 @@ class FlowNet:
             kernel_size=3,
             stride=2,
             padding='SAME')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -318,6 +349,8 @@ class FlowNet:
             kernel_size=3,
             stride=2,
             padding='SAME')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -336,6 +369,8 @@ class FlowNet:
             kernel_size=3,
             stride=2,
             padding='SAME')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         concat = self._concat_conv_deconv_predict(index)
         self.predict[index] = conv2d(
@@ -354,6 +389,8 @@ class FlowNet:
             kernel_size=3,
             stride=2,
             padding='SAME')
+        with tf.name_scope('summary_deconv{}'.format(index)):
+            variable_summary(self.deconv[index])
 
         # prediction at the original resolution.
         concat = self._concat_inputs(x_concat, self.deconv[0], self.predict[1])
@@ -365,6 +402,8 @@ class FlowNet:
             padding='SAME',
             weights_regularizer=l2_regularizer(self.config.l2_scale),
             activation_fn=None)
+        with tf.name_scope('summary_prediction'):
+            variable_summary(self.predict[0])
 
         # Add named identity layers.
         for i, layer in enumerate(self.predict):
