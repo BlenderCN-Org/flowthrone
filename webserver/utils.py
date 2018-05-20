@@ -153,12 +153,17 @@ def task_identifier():
 
 """ Schedules a task and returns an id on success, and 'None' on failure. """
 def schedule_task(request, upload_folder):
+    print upload_folder
     task_uuid = task_identifier()
     task_folder = os.path.join(upload_folder, task_uuid)
-    try:
-        os.mkdir(task_folder)
-    except:
-        return None
+    print task_folder
+    if not os.path.exists(task_folder):
+        try:
+            os.mkdir(task_folder)
+        except:
+            print "Could not create {}".format(task_folder)
+            return None
+    
     options_pbtxt = os.path.join(task_folder, 'options.pbtxt')
     upload_options_pbtxt(request, options_pbtxt)
     

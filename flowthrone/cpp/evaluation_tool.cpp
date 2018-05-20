@@ -1,5 +1,6 @@
 // Binary can be used to evaluate optical flow on a collection of images.
 #include "evaluation.h"
+
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <boost/filesystem.hpp>
