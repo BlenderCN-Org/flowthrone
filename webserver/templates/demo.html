@@ -12,6 +12,10 @@ $(document).ready(function () {
 <div class="container">
 
   <form action="/submit_task" method="post" enctype="multipart/form-data">
+    <div class="alert alert-warning transparent">
+      <b>NOTE</b>: Images uploaded through this form will be stored on the server, and will be <b>public</b> (though you will be able to delete them). 
+    </div>
+    
     <div class="form-group">
       Choose a short video clip to run optical flow on:
       <div class="form-row">
