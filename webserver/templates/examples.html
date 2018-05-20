@@ -52,11 +52,23 @@ function load_result(result_id) {
     maybe_show_error(result['result_image_filename'], 
                      result['result_video_filename']);
     $('#result-id').text(result['id']);
+    $('#result-delete').click(
+        function() {delete_result(result['id']);});
   };
   $.ajax({
     type: 'GET',
     url: "/load_example/" + result_id,
     success: callback,
+  });
+}
+
+// Does what it says. 
+function delete_result(result_id) {
+  $.ajax({
+    type: 'GET',
+    url: "/delete_example/" + result_id,
+    success: function(payload) { window.location = "/examples"; },
+    error: function(payload) { window.location = "/examples"; },
   });
 }
 
@@ -76,6 +88,12 @@ function load_result(result_id) {
   <div class="container" id="result-visualization" style="display:none">
     <span class="result-heading" >Result id:</span>
     <span class="result-text" id="result-id"></span>
+    <span id="result-delete">
+      <button type="button" class="btn btn-outline-danger btn-xs" style="margin-left: 1em; padding-top: 0; padding-bottom: 0"> delete
+      <span class="fas fa-trash-alt" aria-hidden="true"></span>
+      </button>
+    </span>
+    
     <div class="result-heading" >Output image:</div>
     <a href="#" id="result-image-href">
       <img id="result-image" src="#" style="display:none"></img>
@@ -93,7 +111,12 @@ function load_result(result_id) {
 
 <div class="list-group">
 {% for result in results %}
-<button id="{{result}}-button" type="button" class="list-group-item list-group-item-action transparent" onclick="load_result('{{result}}');"> {{ result }} </li>
+    <button id="{{result}}-button" type="button" class="btn list-group-item list-group-item-action transparent" onclick="load_result('{{result}}');">
+    {{ result }}
+    <span class="float-right">
+      <span id="{{result}}-delete" class="btn btn-default btn-xs" style="padding: 0 0 0 0; color:white" aria-hidden="true" onclick="delete_result('{{result}}'); event.stopPropagation();">
+      <span class="fas fa-trash-alt" aria-hidden="true"></span>
+    </span>
 {% endfor %}
 </div>
 
