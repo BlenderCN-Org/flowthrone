@@ -39,7 +39,7 @@ DEFINE_bool(more, false,
 DEFINE_string(options, "config/flowthrone.pbtxt",
               "Filename containing OpticalFlowOptions options (configuration "
               "for optical flow)");
-DEFINE_double(scale, 0.5,
+DEFINE_double(scale, 1.0,
               "Factor by which input images/video should be "
               "rescaled, prior to the optical flow call.");
 DEFINE_int32(skip_frames, 0,
