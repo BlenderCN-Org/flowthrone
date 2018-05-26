@@ -14,6 +14,8 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
 
 # Cmake dependencies
@@ -72,6 +74,8 @@ add_library(flowthrone STATIC
   flowthrone/cpp/optical_flow_model.h
   flowthrone/cpp/optical_flow_tf_model.cpp
   flowthrone/cpp/optical_flow_tf_model.h
+  flowthrone/cpp/optical_flow_tf_internal.cpp
+  flowthrone/cpp/optical_flow_tf_internal.h
   flowthrone/cpp/point_sequence.cpp
   flowthrone/cpp/point_sequence.h
   flowthrone/cpp/signal_handling.cpp
