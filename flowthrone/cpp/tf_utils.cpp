@@ -1,7 +1,7 @@
 #include "tf_utils.h"
 
-namespace flowthrone {
 namespace tf = tensorflow;
+namespace flowthrone {
 
 namespace {
 
@@ -138,5 +138,35 @@ void AsMat(const tf::Tensor& tensor, cv::Mat* mat) {
 }
 
 void CHECK_STATUS(const tf::Status& x) { CHECK(x.ok()) << x.ToString(); }
+
+const tf::NodeDef* GetTensorByName(const tf::GraphDef& graph,
+                                   const std::string& name) {
+  for (const auto& node : graph.node()) {
+    if (node.name() == name) {
+      return &node;
+    }
+  }
+  return nullptr;
+}
+
+tf::DataType GetTensorDataType(const tf::GraphDef& graph_def,
+                               const std::string& name) {
+  const tf::NodeDef* node = GetTensorByName(graph_def, name);
+  CHECK(node) << "Could not find tensor called '" << name << "'";
+  CHECK(node->attr().count("dtype"));
+  return node->attr().at("dtype").type();
+}
+
+tf::TensorShapeProto GetTensorShapeProto(const tf::GraphDef& graph_def,
+                                         const std::string& name) {
+  const std::string kShapeKey = "_output_shapes";
+  const tf::NodeDef* node = GetTensorByName(graph_def, name);
+  CHECK(node) << "Could not find tensor called '" << name << "'";
+  CHECK(node->attr().count(kShapeKey))
+      << "Could not find key: " << kShapeKey << " DebugString\n"
+      << node->DebugString();
+  CHECK_GE(node->attr().at(kShapeKey).list().shape_size(), 1);
+  return node->attr().at(kShapeKey).list().shape(0);
+}
 
 }  // namespace flowthrone
