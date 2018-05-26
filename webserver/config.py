@@ -6,7 +6,7 @@ FLOWTHRONE_ROOT = os.path.split(SERVER_PATH)[0]
 FLOWTHRONE_BUILD_PATH = os.path.join(FLOWTHRONE_ROOT, 'build')
 FLOWTHRONE_OPTIONS_PBTXT = os.path.join(
         FLOWTHRONE_BUILD_PATH, 'config', 'flowthrone.pbtxt')
-ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'avi']                                       
+ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'avi', 'webm']                                       
 ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'bmp', 'png']
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024 # 16 mb
 SERVER_PATH = os.path.dirname(os.path.abspath(__file__))

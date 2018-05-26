@@ -199,6 +199,7 @@ def schedule_task(request, upload_folder):
     else:
         output_filename = os.path.join(task_folder,
                                        config.OUTPUT_VIDEO_FILENAME)
+        output_filename = output_filename.replace('webm', 'avi')
     output_log_filename = os.path.join(task_folder, config.OUTPUT_LOG_FILENAME)
     cmd = get_optical_flow_tool_command(uploaded_files, options_pbtxt,
                                         output_filename, output_log_filename)
@@ -212,6 +213,12 @@ def schedule_task(request, upload_folder):
     print cmd
     with open(output_log_filename, 'w') as f:
         subprocess.call(cmd, stdout=f, stderr=f)
+    if output_filename.endswith('avi'):
+        cmd = ['ffmpeg', '-i', output_filename, '-c:v', 'libvpx', 
+               '-qmin', str(0), '-qmax', str(1), '-crf', str(1), 
+               '-q:v', '1', output_filename.replace('avi', 'webm')]
+        print cmd
+        subprocess.call(cmd)
     return task_uuid
 
 
