@@ -6,7 +6,7 @@
 namespace flowthrone {
 namespace internal {
 
-// Object used to run network inference
+// Object used to run network inference.
 struct Context {
   std::vector<std::string> input_names;
   std::vector<std::string> output_names;
@@ -38,7 +38,7 @@ struct Context {
   // Given two images (possibly different resolutions, and not necessarily
   // matching the input resolution of the network), runs inference and fills
   // in the result.
-  // Output image will be CV_32FC2.
+  // Output image will be CV_32FC2. Inputs may be CV_8UC3 or CV_32FC3.
   void RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in, cv::Mat* flow);
 };
 
