@@ -39,11 +39,13 @@ TEST(DenoiseColorWeightedFilter, DoesTheRightThing) {
   cv::Mat flow_image =
       HorizontalConcat(ComputeFlowColor(flow), ComputeFlowColor(denoised_flow));
 
-  LOG(INFO) << "Showing the original image, original (noisy) optical flow "
-            << "and the resulting (denoised) optical flow.";
-  cv::imshow("original_image", image);
-  cv::imshow("image2", flow_image);
-  cv::waitKey(0);
+  if (FLAGS_visualize) {
+    LOG(INFO) << "Showing the original image, original (noisy) optical flow "
+              << "and the resulting (denoised) optical flow.";
+    cv::imshow("original_image", image);
+    cv::imshow("image2", flow_image);
+    cv::waitKey(0);
+  }
 }
 
 int main(int argc, char** argv) {
