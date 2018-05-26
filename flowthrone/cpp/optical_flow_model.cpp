@@ -1,4 +1,7 @@
 #include "optical_flow_model.h"
+
+#include "glog/logging.h"
+
 #include "flowthrone.pb.h"
 #include "io.h"
 #include "optical_flow_tf_model.h"

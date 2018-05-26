@@ -1,10 +1,10 @@
 #include "optical_flow_tf_model.h"
 
-#include "flow_smoothing.h"
+#include "glog/logging.h"
 #include "opencv2/imgproc/imgproc.hpp"
+
+#include "flow_smoothing.h"
 #include "optical_flow_tf_internal.h"
-#include "tensorflow/cc/saved_model/loader.h"
-#include "tensorflow/core/public/session_options.h"
 #include "tf_utils.h"
 #include "utils.h"
 
@@ -60,8 +60,24 @@ Result OpticalFlowTensorFlowModel::Run(const cv::Mat& I0_in,
     I1 = MaybeConvertTo32F(I1_in);
   }
 
+  bool do_sliding_window = opts_.sliding_window();
+  if (I0.rows < context_->input_shape.dim_size(0) ||
+      I0.cols < context_->input_shape.dim_size(1)) {
+    LOG_FIRST_N(WARNING, 1)
+        << "Your options indicated that you would like to run network "
+           "in a 'sliding window' fashion, but the image is strictly "
+           "smaller than the network input dimensions, so inference "
+           "will be performed in 'one-shot', without 'sliding "
+           "window'. If you _really_ insist on doing a sliding "
+           "window, consider resizing (upscaling) inputs. Image dimensions "
+           "were "
+        << I0.rows << "x" << I0.cols << " and network input dimensions are: "
+        << context_->input_shape.DebugString();
+    do_sliding_window = false;
+  }
+
   cv::Mat output_flow = cv::Mat(I0.size(), CV_32FC2, cv::Scalar(0.0f));
-  if (!opts_.sliding_window()) {
+  if (!do_sliding_window) {
     context_->RunInference(I0, I1, &output_flow);
   } else {
     // Doesn't __really__ need to be the case.

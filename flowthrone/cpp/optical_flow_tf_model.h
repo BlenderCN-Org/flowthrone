@@ -2,7 +2,6 @@
 #include "flowthrone.pb.h"
 #include "opencv2/core/core.hpp"
 #include "optical_flow_model.h"
-#include "tensorflow/core/public/session.h"
 
 namespace flowthrone {
 
