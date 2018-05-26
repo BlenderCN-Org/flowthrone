@@ -114,6 +114,21 @@ Context::~Context() {
   }
 }
 
+std::unique_ptr<Context> Context::CreateFromSavedModel(
+    const OpticalFlowTensorFlowModelOptions& opts,
+    const std::string& export_dir, const std::string& tag) {
+  CHECK(tf::MaybeSavedModelDirectory(export_dir))
+      << "Provided directory does not contain SavedModel? "
+      << "Provided directory was: '" << opts.export_dir() << "'";
+
+  tf::SavedModelBundle bundle;
+  CHECK_STATUS(tf::LoadSavedModel(tf::SessionOptions(), tf::RunOptions(),
+                                  export_dir, {tag}, &bundle));
+
+  return Context::Create(std::move(bundle.session),
+                         bundle.meta_graph_def.graph_def(), opts);
+}
+
 }  // namespace internal
 
 }  // namespace flowthrone

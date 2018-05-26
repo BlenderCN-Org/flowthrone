@@ -33,6 +33,12 @@ struct Context {
       const tensorflow::GraphDef& graph_def,
       const OpticalFlowTensorFlowModelOptions& opts);
 
+  // Creates and returns a Context object from a directory containing a
+  // SavedModel.
+  static std::unique_ptr<Context> CreateFromSavedModel(
+      const OpticalFlowTensorFlowModelOptions& opts,
+      const std::string& export_dir, const std::string& tag);
+
   ~Context();
 
   // Given two images (possibly different resolutions, and not necessarily

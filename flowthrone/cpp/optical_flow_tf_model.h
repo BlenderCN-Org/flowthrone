@@ -18,9 +18,6 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
   Result Run(const cv::Mat& I0, const cv::Mat& I1) override;
 
  private:
-  void InitializeFromSavedModel(const std::string& export_dir,
-                                const std::string& tag);
-
   void Postprocess(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow);
   OpticalFlowTensorFlowModelOptions opts_;
 

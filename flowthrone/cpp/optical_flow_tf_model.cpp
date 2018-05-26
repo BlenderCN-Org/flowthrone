@@ -39,21 +39,8 @@ OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(
     const OpticalFlowTensorFlowModelOptions& opts)
     : opts_(opts) {
   const std::string kModelTag = "train";
-  InitializeFromSavedModel(opts_.export_dir(), kModelTag);
-}
-
-void OpticalFlowTensorFlowModel::InitializeFromSavedModel(
-    const std::string& export_dir, const std::string& tag) {
-  CHECK(tf::MaybeSavedModelDirectory(export_dir))
-      << "Provided directory does not contain SavedModel? "
-      << "Provided directory was: '" << export_dir << "'";
-
-  tf::SavedModelBundle bundle;
-  CHECK_STATUS(tf::LoadSavedModel(tf::SessionOptions(), tf::RunOptions(),
-                                  export_dir, {tag}, &bundle));
-
-  context_ = Context::Create(std::move(bundle.session),
-                             bundle.meta_graph_def.graph_def(), opts_);
+  context_ = internal::Context::CreateFromSavedModel(opts, opts_.export_dir(),
+                                                     kModelTag);
 }
 
 OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {}
