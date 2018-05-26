@@ -42,6 +42,11 @@ DEFINE_string(options, "config/flowthrone.pbtxt",
 DEFINE_double(scale, 1.0,
               "Factor by which input images/video should be "
               "rescaled, prior to the optical flow call.");
+DEFINE_int32(max_input_dim, std::numeric_limits<int>::max(),
+             "Largest allowed input dimension. If input dimensions are larger "
+             "than this number, it will be scaled down. This is applied on top "
+             "of '--scale' factor above. ");
+
 DEFINE_int32(skip_frames, 0,
              "Number of frames to skip from the beginning of the video.");
 DEFINE_int32(fps, 30, "Frame rate of output video (if applicable)");
@@ -49,6 +54,7 @@ DEFINE_double(vis_least_flow_magnitude, 0.0f,
               "Controls optical flow visualization. Smaller values will "
               "produce more intense and more 'frame-by-frame' like visuals; "
               "larger values will look smoother across time.");
+
 namespace flowthrone {
 
 // Abstraction over a pair of images, or a video sequence.
@@ -145,6 +151,21 @@ int main(int argc, char** argv) {
   return 0;
 }
 
+namespace {
+
+cv::Mat MaybeResizeToMaxAllowedDimension(const cv::Mat& image, int max_dim) {
+  float scale = std::min(static_cast<float>(max_dim) / image.rows,
+                         static_cast<float>(max_dim) / image.cols);
+  if (scale >= 1.0) {
+    return image;
+  } else {
+    cv::Mat output;
+    cv::resize(image, output, cv::Size(), scale, scale);
+    return output;
+  }
+}
+
+}  // namespace
 class VideoFeeder : public Feeder {
  public:
   VideoFeeder() {
@@ -160,7 +181,7 @@ class VideoFeeder : public Feeder {
       return false;
     }
     cv::resize(img, img, cv::Size(), FLAGS_scale, FLAGS_scale);
-    *output = img;
+    *output = MaybeResizeToMaxAllowedDimension(img, FLAGS_max_input_dim);
     return success;
   }
 
@@ -183,6 +204,7 @@ class ImageFeeder : public Feeder {
       return false;
     }
     cv::resize(images_[index_], *output, cv::Size(), FLAGS_scale, FLAGS_scale);
+    *output = MaybeResizeToMaxAllowedDimension(*output, FLAGS_max_input_dim);
     index_++;
     return true;
   }

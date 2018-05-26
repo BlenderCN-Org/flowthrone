@@ -28,6 +28,14 @@ def request_has_valid_images(files):
                     files[k].filename)
     return True, ''
 
+def request_has_valid_url(url):
+    if len(url) == 0:
+        return False, "URL was not specified"
+    is_downloadable = is_downloadable_url(url)
+    if is_downloadable:
+        return True, ''
+    else:
+        return False, "URL was specified, but is not downloadable."
 
 def request_has_valid_video(files):
     """ Returns a pair (True/False, error message). """
@@ -44,14 +52,14 @@ def request_has_valid_video(files):
 
 def request_is_valid(request):
     """ Returns a pair (True/False, error message). """
+    has_url, err_url = request_has_valid_url(request.form['video-url'])
     has_images, err_images = request_has_valid_images(request.files)
     has_video, err_video = request_has_valid_video(request.files)
 
-    if has_images and has_video:
-        return False, ("Specifying both a pair of images and a video is "
-                       "ambiguous -- should specify only one.")
-    if not has_images and not has_video:
-        return False, '\n'.join([err_images, err_video])
+    if sum([has_images, has_video, has_url]) > 1:
+        return False, ("Please only specify either a single url, or a pair of images or a video -- request is ambiguous otherwise!")
+    if sum([has_images, has_video, has_url]) == 0:
+        return False, '\n'.join([err_images, err_video, err_url])
     return True, ''
 
 
@@ -59,6 +67,30 @@ def upload_file(file, upload_folder):
     filename = os.path.join(upload_folder, secure_filename(file.filename))
     file.save(filename)
     return filename
+
+def is_downloadable_url(url):
+    import youtube_dl
+    ydl = youtube_dl.YoutubeDL({})
+    try:
+        print "Attempting to extract info from ", url
+        info = ydl.extract_info(url, download=False)
+        print info
+        return True
+    except:
+        print "Caught exception: ", str(e)
+        return False
+
+def upload_youtube_url(url, upload_folder):
+    import youtube_dl
+    ydl_opts = {
+            'outtmpl': os.path.join(upload_folder, 'video.%(ext)s'),
+            'keepvideo': True,
+            'merge_output_format': 'mkv',
+            }
+    ydl = youtube_dl.YoutubeDL(ydl_opts)
+    ydl.download([url])
+    return os.path.join(upload_folder, 'video.mkv')
+
 
 
 def upload_files(request, upload_folder):
@@ -78,6 +110,9 @@ def upload_files(request, upload_folder):
     if has_video:
         return [upload_file(request.files['video'], upload_folder)]
 
+    has_url, _ = request_has_valid_url(request.form['video-url'])
+    if has_url:
+        return [upload_youtube_url(request.form['video-url'], upload_folder)]
 
 def upload_options_pbtxt(request, output_filename):
     # TODO: check that pbtxt is valid.
@@ -101,9 +136,13 @@ def get_optical_flow_tool_images_command(img1_filename, img2_filename,
 
 def get_optical_flow_tool_video_command(video_filename, options_pbtxt_filename,
                                         output_filename, output_log_filename):
+    MAX_INPUT_DIM = 320*2 # resize videos that are larger than this value.
+    LEAST_FLOW_MAGNITUDE = 10.0 # leads to slightly better looking results.
     return [
         optical_flow_binary(), '--video', video_filename, '--options',
         options_pbtxt_filename, '--output', output_filename,
+        '--max_input_dim', str(MAX_INPUT_DIM),
+        '--vis_least_flow_magnitude', str(LEAST_FLOW_MAGNITUDE),
         '--alsologtostderr=1', '&>', output_log_filename
     ]
 
