@@ -44,8 +44,9 @@ struct Context {
   // Given two images (possibly different resolutions, and not necessarily
   // matching the input resolution of the network), runs inference and fills
   // in the result.
-  // Output image will be CV_32FC2. Inputs may be CV_8UC3 or CV_32FC3.
-  void RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in, cv::Mat* flow);
+  // Inputs may be CV_8UC3 or CV_32FC3. Output image(s) will be CV_32FC2.
+  void RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in,
+                    std::vector<cv::Mat>* outputs);
 };
 
 }  // namespace internal

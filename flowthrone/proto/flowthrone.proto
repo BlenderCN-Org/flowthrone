@@ -25,6 +25,10 @@ message OpticalFlowTensorFlowModelOptions {
   // see undesireable artifacts at the boundary.
   optional double window_stride = 3 [ default = 1.0 ];
 
+  // Whether images should be rescaled prior to running optical flow. Values
+  // larger than 1 will upscale original images, and then downsample flow.
+  // Does not do anything by default.
+  optional double image_resize_factor = 7 [ default = 1.0 ];
   // Options for smoothing/denoising flow field. No smoothing will be done if
   // the field is not specified.
   optional FlowDenoisingOptions denoising_options = 6;
@@ -34,6 +38,7 @@ message FlowDenoisingOptions {
   optional float sigma_intensity = 1 [ default = 1.0 ];
   optional float sigma_distance = 2 [ default = 1.0 ];
   optional int32 window_size = 3 [ default = 5 ];
+  optional bool use_probability_of_occlusion = 4 [ default = true ];
 }
 
 // Message for specifying a collection of image pair / groundtruth triplets,

@@ -18,8 +18,10 @@ class OpticalFlowTensorFlowModel : public OpticalFlowModel {
 
  private:
   void Postprocess(const cv::Mat& I0, const cv::Mat& I1, cv::Mat* flow);
-  OpticalFlowTensorFlowModelOptions opts_;
 
+  bool NeedSlidingWindow(const cv::Size& input_image_size);
+
+  OpticalFlowTensorFlowModelOptions opts_;
   std::unique_ptr<internal::Context> context_;
 };
 

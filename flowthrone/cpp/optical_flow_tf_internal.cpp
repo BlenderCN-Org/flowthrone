@@ -82,7 +82,7 @@ std::unique_ptr<Context> Context::Create(
 }
 
 void Context::RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in,
-                           cv::Mat* flow) {
+                           std::vector<cv::Mat>* outputs) {
   // Size of the input fed into this function.
   // This will be used to resize the output.
   cv::Size original_input_output_size = I0_in.size();
@@ -101,11 +101,16 @@ void Context::RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in,
   cv::resize(I1_in, I1, input_size);
   AsTensor(I0, &inputs_tf[0].second);
   AsTensor(I1, &inputs_tf[1].second);
-  CHECK_STATUS(session->Run(inputs_tf, {output_names[0]}, {}, &outputs_tf));
-  CHECK_EQ(1, outputs_tf.size());
-  const tf::Tensor& output_tf = outputs_tf[0];
-  AsMat(output_tf, flow);
-  *flow = ResampleFlow(*flow, original_input_output_size);
+  CHECK_STATUS(session->Run(inputs_tf, output_names, {}, &outputs_tf));
+  CHECK_EQ(output_names.size(), outputs_tf.size());
+
+  outputs->resize(output_names.size());
+  for (size_t i = 0; i < output_names.size(); ++i) {
+    const tf::Tensor& output_tf = outputs_tf[i];
+    cv::Mat& output_mat = outputs->at(i);
+    AsMat(output_tf, &output_mat);
+    output_mat = ResampleFlow(output_mat, original_input_output_size);
+  }
 }
 
 Context::~Context() {
@@ -122,8 +127,13 @@ std::unique_ptr<Context> Context::CreateFromSavedModel(
       << "Provided directory was: '" << opts.export_dir() << "'";
 
   tf::SavedModelBundle bundle;
-  CHECK_STATUS(tf::LoadSavedModel(tf::SessionOptions(), tf::RunOptions(),
-                                  export_dir, {tag}, &bundle));
+
+  tf::SessionOptions session_opts;
+  tf::GPUOptions* gpu_opts = session_opts.config.mutable_gpu_options();
+  gpu_opts->set_allow_growth(true);
+
+  CHECK_STATUS(tf::LoadSavedModel(session_opts, tf::RunOptions(), export_dir,
+                                  {tag}, &bundle));
 
   return Context::Create(std::move(bundle.session),
                          bundle.meta_graph_def.graph_def(), opts);

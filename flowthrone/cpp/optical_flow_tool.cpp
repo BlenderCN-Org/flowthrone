@@ -50,6 +50,7 @@ DEFINE_int32(max_input_dim, std::numeric_limits<int>::max(),
 DEFINE_int32(skip_frames, 0,
              "Number of frames to skip from the beginning of the video.");
 DEFINE_int32(fps, 30, "Frame rate of output video (if applicable)");
+DEFINE_bool(play_continuously, false, "");
 DEFINE_double(vis_least_flow_magnitude, 0.0f,
               "Controls optical flow visualization. Smaller values will "
               "produce more intense and more 'frame-by-frame' like visuals; "
@@ -129,7 +130,7 @@ int main(int argc, char** argv) {
         cv::imshow("warped_points", HorizontalConcat(I0_vis, I1_vis));
       }
       cv::imshow("image", vis);
-      int key = cv::waitKey(0);
+      int key = cv::waitKey(FLAGS_play_continuously);
       if (key == 27) {
         break;
       }

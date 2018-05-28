@@ -5,9 +5,13 @@ output_tensor_name: ["prediction"]
 sliding_window: true
 window_stride: 0.25  
 
+# Factor by which images are down/up-scaled prior to running optical flow.
+image_resize_factor: 1.0
+
 # Cross-bilateral filtering. This is slow: if timing is of concern, disable it.
 denoising_options {
   sigma_intensity: 16.0
   sigma_distance: 4.0
   window_size: 5
+  use_probability_of_occlusion: true
 }
