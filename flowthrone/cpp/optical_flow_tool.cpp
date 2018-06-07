@@ -55,6 +55,9 @@ DEFINE_double(vis_least_flow_magnitude, 0.0f,
               "Controls optical flow visualization. Smaller values will "
               "produce more intense and more 'frame-by-frame' like visuals; "
               "larger values will look smoother across time.");
+DEFINE_bool(show_blended_images, true,
+            "If visualization is enabled, whether to show a pair of images "
+            "blended together, or whether to show a single image (I0)");
 
 namespace flowthrone {
 
@@ -97,6 +100,8 @@ int main(int argc, char** argv) {
   flowthrone::InstallSigIntHandler();
 
   VisTupleOptions vis_opts;
+  vis_opts.image_vis = FLAGS_show_blended_images ? VisTupleOptions::SHOW_BLENDED
+                                                 : VisTupleOptions::SHOW_IMAGE0;
   vis_opts.least_max_flow_mag = FLAGS_vis_least_flow_magnitude;
   int frame_index = -1;
   while (true) {

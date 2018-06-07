@@ -145,10 +145,32 @@ cv::Mat VerticalConcat(const cv::Mat& x, const cv::Mat& y) {
   return out;
 }
 
+namespace {
+
+cv::Mat ImageToVisualize(const cv::Mat& I0, const cv::Mat& I1,
+                         const VisTupleOptions& opts) {
+  cv::Mat image_to_vis;
+  switch (opts.image_vis) {
+    case VisTupleOptions::SHOW_IMAGE0:
+      image_to_vis = I0;
+      break;
+    case VisTupleOptions::SHOW_IMAGE1:
+      image_to_vis = I1;
+      break;
+    case VisTupleOptions::SHOW_BLENDED:
+      image_to_vis = 0.5 * I0 + 0.5 * I1;
+      break;
+  }
+  return image_to_vis;
+}
+
+}  // namespace
+
 cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
                        const cv::Mat& flow, const VisTupleOptions& opts) {
   cv::Mat flow_vis = ComputeFlowColor(flow, opts.least_max_flow_mag);
-  return HorizontalConcat(0.5 * I0 + 0.5 * I1, flow_vis);
+  cv::Mat image_to_vis = ImageToVisualize(I0, I1, opts);
+  return HorizontalConcat(image_to_vis, flow_vis);
 }
 
 cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
@@ -156,7 +178,8 @@ cv::Mat VisualizeTuple(const cv::Mat& I0, const cv::Mat& I1,
                        const VisTupleOptions& opts) {
   cv::Mat flow_vis = ComputeFlowColor(flow, opts.least_max_flow_mag);
   cv::Mat flow_vis_gt = ComputeFlowColor(flow_gt, opts.least_max_flow_mag);
-  return HorizontalConcat(0.5 * I0 + 0.5 * I1, flow_vis, flow_vis_gt);
+  cv::Mat image_to_vis = ImageToVisualize(I0, I1, opts);
+  return HorizontalConcat(image_to_vis, flow_vis, flow_vis_gt);
 }
 
 std::pair<cv::Mat, cv::Mat> OverlayWarpedPoints(const cv::Mat& I0,

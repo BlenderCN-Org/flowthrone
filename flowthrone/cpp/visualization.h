@@ -25,7 +25,17 @@ cv::Mat VerticalConcat(const cv::Mat& x, const cv::Mat& y);
 
 // Options for visualizing a 'tuple' of images.
 struct VisTupleOptions {
+  // Describes how images should be displayed.
+  enum ImageVisualizationPlan {
+    // Only show first image.
+    SHOW_IMAGE0 = 0,
+    // Only show second image.
+    SHOW_IMAGE1 = 1,
+    // Show blended images.
+    SHOW_BLENDED = 2,
+  };
   float least_max_flow_mag = 0.0f;
+  ImageVisualizationPlan image_vis = SHOW_BLENDED;
 };
 
 // Returns an horizontally concatenated image used for visualization:
