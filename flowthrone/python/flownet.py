@@ -3,9 +3,11 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
+import tf_utils
 from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error, l2_warp_error
 from training_manager import variable_summary
 import warnings
+
 
 
 class FlowNetConfig:
@@ -550,44 +552,8 @@ class FlowNet:
 
     @staticmethod
     def get_endpoint_loss_at_scale(prediction, groundtruth, weights=None):
-        """
-        Calculates endpoint loss at a given scale.
-        'groundtruth' and 'weights' are given at the original scale, while
-        prediction (optical flow) may be at a coarser scale. Loss is computed
-        by downscaling groundtruth and weights.
-        """
-        if not prediction.shape == groundtruth.shape:
-            sz = [prediction.shape[1], prediction.shape[2]]
-            groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
-            if weights is not None:
-                weights_scaled = tf.image.resize_images(weights, sz)
-            else:
-                weights_scaled = None
-            return tf.reduce_mean(
-                endpoint_flow_error(prediction, groundtruth_scaled,
-                                    weights_scaled))
-        else:
-            return tf.reduce_mean(
-                endpoint_flow_error(prediction, groundtruth, weights))
+        return tf_utils.endpoint_loss_at_scale(prediction, groundtruth, weights)
 
     @staticmethod
     def get_angular_loss_at_scale(prediction, groundtruth, weights=None):
-        """
-        Returns the angular loss at a given scale.
-        'groundtruth' and 'weights' are given at the original scale, while
-        prediction (optical flow) may be at a coarser scale. Loss is computed
-        by downscaling groundtruth and weights.
-        """
-        if not prediction.shape == groundtruth.shape:
-            sz = [prediction.shape[1], prediction.shape[2]]
-            if weights is not None:
-                weights_scaled = tf.image.resize_images(weights, sz)
-            else:
-                weights_scaled = None
-            groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
-            return tf.reduce_mean(
-                angular_flow_error(groundtruth_scaled, prediction,
-                                   weights_scaled))
-        else:
-            return tf.reduce_mean(
-                angular_flow_error(groundtruth, prediction, weights))
+        return tf_utils.angular_loss_at_scale(prediction, groundtruth, weights)

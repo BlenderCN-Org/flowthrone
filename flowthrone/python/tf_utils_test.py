@@ -21,9 +21,8 @@ class TestWarpWithFlow(unittest.TestCase):
         self.uv = tf.constant(2.0, tf.float32,
                               [self.n, self.rows, self.cols, 2])
 
-    """ Verifies that we can correctly produce a trivial sampling grid. """
-
     def test_flow_grid(self):
+        """ Verifies that we can correctly produce a trivial sampling grid. """
         session = tf.Session()
         identity_uv = tf.constant(0.0, tf.float32,
                                   [self.n, self.rows, self.cols, 2])
@@ -36,10 +35,11 @@ class TestWarpWithFlow(unittest.TestCase):
             error = np.linalg.norm(tf_grid - np_grid)
             self.assertLessEqual(error, self.tolerance)
 
-    """ Verifies a trivial case of get_pixel_values (queried points is the
-      grid itself). """
-
     def test_get_image_values(self):
+        """
+        Verifies a trivial case of get_pixel_values (queried points is the
+        grid itself).
+        """
         identity_uv = tf.constant(0.0, tf.float32,
                                   [self.n, self.rows, self.cols, 2])
         grid = tf_utils._get_flow_grid(identity_uv)
@@ -54,9 +54,8 @@ class TestWarpWithFlow(unittest.TestCase):
             error = np.linalg.norm(image_values - image_samples_values)
             self.assertLessEqual(error, self.tolerance)
 
-    """ Verifies that identity warp is correct. """
-
     def test_warp_with_flow_identity(self):
+        """ Verifies that identity warp is correct. """
         identity_uv = tf.constant(0.0, tf.float32,
                                   [self.n, self.rows, self.cols, 2])
 
@@ -68,9 +67,8 @@ class TestWarpWithFlow(unittest.TestCase):
             error = np.linalg.norm(image_values - warped_image_values)
             self.assertLessEqual(error, self.tolerance)
 
-    """ Verifies that a simple constant 1-pixel shift works correctly. """
-
     def test_warp_with_nonzero_flow(self):
+        """ Verifies that a simple constant 1-pixel shift works correctly. """
         image = np.zeros([self.n, self.rows, self.cols, 1])
         image[0, 2, 2:5, 0] = 1
         warped_image_gt = np.zeros([self.n, self.rows, self.cols, 1])
@@ -89,6 +87,57 @@ class TestWarpWithFlow(unittest.TestCase):
             warped_image_values = image_warped.eval()
             error = np.linalg.norm(warped_image_gt - warped_image_values)
             self.assertLessEqual(error, self.tolerance)
+
+
+class TestCorrelationLayer(unittest.TestCase):
+
+    def test_correlation_layer_shape(self):
+        """ Verifies that output shape is as large as it should be. """
+        x = tf.convert_to_tensor(
+            np.random.uniform(0, 1, [1, 16, 18, 10]), dtype=tf.float32)
+        y = tf.convert_to_tensor(
+            np.random.uniform(0, 1, [1, 16, 18, 10]), dtype=tf.float32)
+        out = tf_utils.correlation_layer(x, y, max_shift=1)
+        self.assertEqual([1, 16, 18, 3*3], out.shape)
+      
+    def test_translation_list_sanity(self):
+        EXPECTED_TX = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [0, -1], [0, 0], [0, 1],
+            [1, -1], [1, 0], [1, 1],
+        ]
+        tx = tf_utils._get_translation_list_for_correlation(1)
+        self.assertEqual(EXPECTED_TX, tx)
+
+    def test_correlation_layer_zeros(self):
+        """ 
+        Test documents that feature maps are zeroed out when shifts are applied.
+        This essentially because the input feature maps are zeroed out when
+        shifted.
+        """
+        from numpy.linalg import norm 
+        shape = [1, 3, 3, 4]
+        x = tf.convert_to_tensor(
+            np.random.uniform(0, 1, shape), dtype=tf.float32)
+        y = tf.convert_to_tensor(
+            np.random.uniform(0, 1, shape), dtype=tf.float32)
+        correlation = tf_utils.correlation_layer(x, y, max_shift=1)
+ 
+        session = tf.Session()
+        with session.as_default():
+            corr_values = correlation.eval()
+            corr_values = corr_values[0, :, :, :]
+            
+            values = corr_values[:,:,0] # (-1, -1)
+            self.assertEqual(norm(values[:,-1]), 0,
+                    "Right-most column should be zero!")
+            self.assertEqual(norm(values[-1,:]), 0,
+                    "Bottom-most row should be zero!")
+
+            values = corr_values[:,:,8] # (1, 1)
+            self.assertEqual(norm(values[0,:]), 0, "Top row should be zero.")
+            self.assertEqual(norm(values[:,0]), 0,
+                    "Left-most column should be zero.")
 
 
 if __name__ == '__main__':

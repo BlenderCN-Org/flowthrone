@@ -1,0 +1,692 @@
+"""
+Implementation of PWC-net, as described in:
+  https://arxiv.org/pdf/1709.02371.pdf
+  "PWC-Net: CNNs for Optical Flow Using Pyramid, Warping, and Cost Volume",
+    D. Sun, X. Yang, M.Y. Liu, and J. Kautz
+
+but with some differences (to put it mildly).
+
+Watch out: channel dimensions do not follow the ones described in the paper
+(i did not attempt to replicate  the results), nor are they carefully chosen.
+Additionally, some tricks used in authors' code (in particular vis-a-vis
+scaled flow fields) are not used here. We also use batch norm whereas authors
+don't seem to, we also use angular loss, etc...
+
+Classes are organized roughly as follows:
+
+- PWCNet:
+    constructs the entire network. Most users should be using this class and
+    shouldn't really care about anything else in this file.
+
+- PWCNetTrainer:
+    used for training PWCNet. If you only care about inference, you do not
+    need this.
+
+- OpticalFlowEstimator
+    module that produces a NxN flow estimate given
+        a) two NxN feature maps (corresponding to first and second image)
+        b) N/2 x N/2 optical flow (from coarser level of the pyramid)
+    This is one of the components described in the paper.
+
+- FeaturePyramidExtractor
+    module that extracts feature maps. This is roughly similar to an 'encoder'
+    in a U-net type network. This is one of the components described in the
+    paper.
+    Note that this class is a 'singleton' in the sense that multiple instances
+    will share the same weights (as in the paper).
+
+- ContextEstimator
+    module that 'refines' optical flow (this is just a deep version of
+    bilateral/cross-bilateral/median filter sorcery common in classical
+    optical flow methods).
+"""
+
+# Add parent directory to pythonpath.
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import tensorflow as tf
+import tf_utils
+from training_manager import variable_summary
+import warnings
+from tensorflow.contrib.slim import conv2d
+from tensorflow.contrib.slim import l2_regularizer
+from tensorflow.contrib.layers import batch_norm
+import glog as log
+
+
+class OpticalFlowEstimator:
+    """
+    A network for producing an optical flow estimate given a pair of images
+    and a subsampled input flow estimate.
+
+    USAGE:
+    >>> net = OpticalFlowEstimator(x1, x2, uv) # 'x1' and 'x2' should have the
+    >>>                                        # same shape, while 'uv' must be
+    >>>                                        # twice smaller.
+    >>> output = net.get_flow() # accessor for the output of the network
+    >>>                         # (flow estimate that has the same dimensions
+    >>>                         # as the input feature maps)
+    >>> # the class provides additional accessors (for debugging and for
+    >>> # routing into other networks):
+    >>> penultimate = net.get_penultimate_layer() # feature map immediately
+    >>>                                           # before the output.
+    >>> cost_volume = net.get_cost_volume() # output of the correlation layer.
+    >>> x2_warped = net.get_x2_warped() # feature map warped by the input flow
+    >>>                                 # estimate.
+    """
+
+    class Options:
+        def __init__(self):
+            self.MAX_SHIFT = 1
+            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.NUM_FILTERS = [128, 64, 64, 32, 2]
+            # cost-volume / correlation layer hasn't been properly vetted, so
+            # 'off' by default.
+            self.USE_COST_VOLUME = False
+            # Unless this is 'None', will apply batch_norm after each
+            # convolutional layer.
+            self.is_training = None
+
+    def __init__(self, x1, x2, uv, opt=None):
+        OpticalFlowEstimator._verify_shapes(x1, x2, uv)
+
+        self.options = opt if opt is not None else \
+            OpticalFlowEstimator.Options()
+
+        name = 'OpticalFlowEstimator_{}x{}'.format(x1.shape[1], x1.shape[2])
+        with tf.name_scope(None, name, [x1, x2, uv]):
+            self.x2_warped = tf_utils.warp_with_flow(x2,
+                                                     tf_utils.resample_flow(
+                                                         uv, x2.shape))
+            if self.options.USE_COST_VOLUME:
+                self.cost_volume = tf_utils.correlation_layer(
+                    x1, self.x2_warped, self.options.MAX_SHIFT)
+                network_tail = tf.concat([self.cost_volume, x1], axis=3)
+            else:
+                network_tail = tf.concat([x1, self.x2_warped], axis=3)
+                self.cost_volume = None
+            self.layers = self._make_network_spine(network_tail)
+
+    def get_x2_warped(self):
+        """
+        Returns tensor corresponding to 'x2' warped to 'x1' using the input
+        flow.
+        """
+        return self.x2_warped
+
+    def get_cost_volume(self):
+        """
+        Returns tensor corresponding to the 'cost volume', output of the
+        correlation layer.
+        """
+        return self.cost_volume
+
+    def get_flow(self):
+        """ Returns tensor corresponding to the estimated optical flow. """
+        return self.layers[-1]
+
+    def get_penultimate_layer(self):
+        """ Returns the penultimate feature map. """
+        log.check_ge(
+            len(self.layers), 2, 'Network doesnt have a penultimate layer.')
+        return self.layers[-2]
+
+    def debug_info(self):
+        """ Prints network layers. """
+        print "x2 warped layer: ", self.x2_warped
+        if self.cost_volume is not None:
+            print "cost volume: ", self.cost_volume
+        else:
+            print "cost volume was not instantiated."
+        for i, layer in enumerate(self.layers):
+            print "Spine layer {}:".format(i), layer
+
+    def _make_network_spine(self, entree):
+        """
+        Returns a sequence of layers forming the 'spine' of the network.
+        The input layer is the first element in the returned list, and the last
+        element is the the output 'layer'. Spatial dimensions of the feature
+        map are preserved.
+        """
+        outputs = [entree]
+        for outs in self.options.NUM_FILTERS[0:-1]:
+            outputs.append(
+                self._conv2d_rectified(outputs[-1], num_outputs=outs))
+        # Add the final layer without ReLU following it.
+        log.check_eq(
+            2,
+            self.options.NUM_FILTERS[-1],
+            message=('Last filter in the list must have "num_outputs=2", '
+                     'since its output is optical flow field.'))
+
+        outputs.append(
+            self._conv2d(
+                entree=outputs[-1], num_outputs=self.options.NUM_FILTERS[-1]))
+
+        return outputs
+
+    def _conv2d_rectified(self, entree, num_outputs):
+        """ Wrapper around conv2d. """
+        use_batch_norm = self.options.is_training is not None
+        return _maybe_add_batch_norm_or_activation_fn(
+            self._conv2d(entree, num_outputs), use_batch_norm,
+            self.options.is_training)
+
+    def _conv2d(self, entree, num_outputs):
+        """
+        Wrapper around conv2d with a smaller number of arguments, since all
+        layers in feature pyramid extractor have padding 'SAME' and the same
+        kernel size. This function does not apply any rectification.
+        """
+        return conv2d(
+            entree,
+            num_outputs=num_outputs,
+            kernel_size=3,
+            stride=1,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(
+                self.options.L2_REGULARIZATION_SCALE),
+            activation_fn=None)
+
+    @staticmethod
+    def _verify_shapes(c1, c2, uv):
+        log.check_eq(c1.shape[1:], c2.shape[1:],\
+            "Shape of the two feature maps must match!")
+        log.check_eq(len(set([c1.dtype, c2.dtype, uv.dtype])), 1, \
+            "All datatypes must match")
+        log.check(all([4 == len(nd) for nd in [c1.shape, c2.shape, uv.shape]]), \
+                "Must be passed as NxHxWxC")
+        log.check_eq(uv.shape[3], 2, "Did not pass flow where expected flow?")
+        log.check_eq(2 * int(uv.shape[1]), c1.shape[1])
+        log.check_eq(2 * int(uv.shape[2]), c1.shape[2])
+
+
+class FeaturePyramidExtractor:
+    """
+    A network for feature pyramid extraction.
+    CAUTION: multiple instances of this network will share weights.
+
+    USAGE:
+    >>> net = FeaturePyramidExtractor(inp)
+    >>> # different 'levels' in the pyramid can be accessed like so:
+    >>> net.get_level(index) # index >= 0 and index <= 6
+
+    >>> net.get_level(0) == inp # the first layer is exactly the tensor that
+    >>>                         # you provided at input time.
+    >>> # you may also access individual layers like so:
+    >>> net.layers
+    """
+
+    class Options:
+        def __init__(self):
+            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
+            # If set to something other than 'None', will apply batch
+            # normalization.
+            self.is_training = None
+
+    def __init__(self, entree, opt=None):
+        """ Returns a network """
+        FeaturePyramidExtractor._verify_input(entree)
+        self.options = opt if opt is not None \
+            else FeaturePyramidExtractor.Options()
+
+        self.layers = []
+        self.layers.append(entree)
+        with tf.variable_scope('feature_pyramid'):
+            for index, outs in enumerate(self.options.NUM_FILTERS):
+                self.layers.append(
+                    self._conv2d_rectified(
+                        self.layers[-1],
+                        num_outputs=outs,
+                        stride=2,
+                        scope='conv{}a'.format(index)))
+                self.layers.append(
+                    self._conv2d_rectified(
+                        self.layers[-1],
+                        num_outputs=outs,
+                        stride=1,
+                        scope='conv{}b'.format(index)))
+
+    def num_levels(self):
+        return len(self.options.NUM_FILTERS) + 1
+
+    def get_level(self, index):
+        """ Returns 'layer' in the pyramid (called c_t^{index} in the paper).
+            (The pyramid is split into 7 blocks, but each blocks actually has
+            two conv layers). """
+        log.check_ge(index, 0)
+        log.check_le(index, self.options.NUM_FILTERS)
+        return self.layers[2 * index]
+
+    def debug_info(self):
+        """ Prints layers """
+        for i, layer in enumerate(self.layers):
+            print "Feature pyramid extractor layer {}:".format(i), layer
+
+    def _conv2d_rectified(self, entree, num_outputs, stride, scope):
+        use_batch_norm = self.options.is_training is not None
+        conv_op = self._conv2d(entree, num_outputs, stride, scope)
+        return _maybe_add_batch_norm_or_activation_fn(
+            conv_op,
+            use_batch_norm,
+            self.options.is_training,
+            reuse=tf.AUTO_REUSE,
+            scope=scope)
+
+    def _conv2d(self, entree, num_outputs, stride, scope):
+        """
+        Wrapper around conv2d with a smaller number of arguments, since all
+        layers in feature pyramid extractor have padding 'SAME' and the same
+        kernel size.
+        Does not apply an activation function.
+        """
+        return conv2d(
+            entree,
+            num_outputs=num_outputs,
+            kernel_size=3,
+            stride=stride,
+            padding='SAME',
+            weights_regularizer=l2_regularizer(
+                self.options.L2_REGULARIZATION_SCALE),
+            activation_fn=None,
+            reuse=tf.AUTO_REUSE,
+            scope=scope)
+
+    @staticmethod
+    def _verify_input(entree):
+        log.check_eq(len(entree.shape), 4, \
+            ("Input must be NHWC (i.e. must have 4 dimensions) -- "
+             "slim behaves poorly otherwise."))
+        log.check_eq(entree.shape[-1], 3, "Input should have three channels.")
+
+
+class ContextEstimator:
+    """
+    The context network that takes in a flow estimate and a feature map,
+    and produces a 'refined' flow field.
+
+    USAGE:
+    >>> net = ContextEstimator(inputs, uv)
+    >>> output = net.get_flow() # accessor for the final flow estimate.
+    >>> # additionally, you can access intermediate layers by e.g.:
+    >>> [print layer for layer in net.layers ]
+    >>> # the last element in that array is the 'delta' flow estimated by the
+    >>> # network.
+
+    TODO(vasiliy): THIS CLASS DOES NOT CURRENTLY SUPPORT BATCH_NORM
+    """
+
+    class Options:
+        def __init__(self):
+            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.NUM_FILTERS = [128, 128, 128, 96, 64, 32]
+            self.NUM_DILATIONS = [1, 2, 4, 8, 16, 1]
+
+    def __init__(self, entree, uv, opt=None):
+        ContextEstimator._verify_input(entree, uv)
+
+        self.options = opt if opt is not None \
+            else ContextEstimator.Options()
+
+        inp_concat = tf.concat([entree, uv], axis=3)
+        with tf.name_scope('context'):
+            self.layers = self._make_network_spine(inp_concat)
+            # Add the final layer without ReLU following it.
+            self.layers.append(
+                conv2d(
+                    inputs=self.layers[-1],
+                    num_outputs=2,
+                    kernel_size=3,
+                    padding='SAME',
+                    weights_regularizer=l2_regularizer(
+                        self.options.L2_REGULARIZATION_SCALE),
+                    activation_fn=None))
+        # The two estimates (the 'delta' estimate from the network and the
+        # original estimate) are combined by a simple addition.
+        self.flow = self.layers[-1] + uv
+
+    def get_flow(self):
+        """ Returns the final flow estimate. """
+        return self.flow
+
+    def _make_network_spine(self, inp):
+        log.check_eq(
+            len(self.options.NUM_FILTERS), len(self.options.NUM_DILATIONS),
+            'NUM_FILTERS and NUM_DILATIONS must be equally sized!')
+        layers = [inp]
+        for i in range(len(self.options.NUM_FILTERS)):
+            layers.append(
+                self._conv2d(
+                    layers[-1],
+                    num_outputs=self.options.NUM_FILTERS[i],
+                    rate=self.options.NUM_DILATIONS[i]))
+        return layers
+
+    def _conv2d(self, entree, num_outputs, rate):
+        return conv2d(
+            entree,
+            num_outputs=num_outputs,
+            kernel_size=3,
+            stride=1,
+            padding='SAME',
+            rate=rate,
+            weights_regularizer=l2_regularizer(
+                self.options.L2_REGULARIZATION_SCALE),
+            activation_fn=tf.nn.relu)
+
+    @staticmethod
+    def _verify_input(entree, uv):
+        log.check_eq(4, len(entree.shape))
+        log.check_eq(4, len(uv.shape))
+        log.check_eq(uv.shape[1:3], entree.shape[1:3])
+        log.check_eq(2, uv.shape[3])
+
+
+class PWCNet:
+    """
+    Class that creates the network described in: arxiv.org/pdf/1709.02371.pdf
+    """
+
+    class Options:
+        def __init__(self):
+            self.pyramid_opt = FeaturePyramidExtractor.Options()
+            self.estimator_opt = OpticalFlowEstimator.Options()
+            self.context_opt = ContextEstimator.Options()
+            self.use_context_net = False
+
+    def __init__(self, x1, x2, options=None):
+        self.options = PWCNet.Options() if options is None else options
+
+        PWCNet._verify_input(x1, x2)
+        # One would normalize and rescale CV_8UC3 images here.
+        x1_float = PWCNet._convert_to_float_and_normalize(x1)
+        x2_float = PWCNet._convert_to_float_and_normalize(x2)
+
+        # Instantiate a feature extractor network. Weights of the two
+        # towers should be shared.
+        # Higher levels of the pyramid are 'more coarse'
+        self.pyramid1 = FeaturePyramidExtractor(
+            x1_float, opt=self.options.pyramid_opt)
+        self.pyramid2 = FeaturePyramidExtractor(
+            x2_float, opt=self.options.pyramid_opt)
+
+        # Initializes a list of flow estimators at different levels.
+        self.estimator_net = PWCNet._initialize_flow_estimators(
+            self.pyramid1, self.pyramid2, self.options.estimator_opt)
+
+        # Maybe initialize a network estimating 'context' (refined flow).
+        if self.options.use_context_net:
+            self.context_net = ContextEstimator(
+                self.estimator_net[-1].get_penultimate_layer(),
+                self.estimator_net[-1].get_flow(),
+                opt=self.options.context_opt)
+
+            PWCNet._verify_left_is_half_scale_of_right(
+                self.context_net.get_flow().shape, x1.shape)
+            self.output_flow = tf_utils.resample_flow(
+                self.context_net.get_flow(), x1.shape)
+        else:
+            self.context_net = None
+            self.output_flow = tf_utils.resample_flow(
+                self.estimator_net[-1].get_flow(), x1.shape)
+
+    def get_output_flow(self):
+        """ Returns the final flow estimate. """
+        return self.output_flow
+
+    def get_raw_flow(self, level):
+        """
+        Returns an estimate of flow without context network applied to it.
+        Larger levels correspond to finer-resolution estimates.
+        """
+        log.check(level >= 0 and level < len(self.estimator_net))
+        return self.estimator_net[level].get_flow()
+
+    def debug_info(self):
+        print "Pyramid1:"
+        self.pyramid1.debug_info()
+        print "Pyramid2:"
+        self.pyramid2.debug_info()
+        for i, estimator in enumerate(self.estimator_net):
+            print "Flow estimator {}:".format(i)
+            estimator.debug_info()
+        if self.context_net is not None:
+            print "Context estimator:"
+            context_net.debug_info()
+        else:
+            print "Context estimator is not instantiated."
+        print "Output flow:", self.output_flow
+
+    @staticmethod
+    def _initialize_flow_estimators(pyramid1, pyramid2, options):
+        batch_size = tf.shape(pyramid1.get_level(0))[0]
+        # get the shape of the last level in the pyramid, and downscale it by
+        # 2 to get the initial (null) flow shape.
+        num_levels = pyramid1.num_levels()
+
+        smallest_level_shape = pyramid1.get_level(
+            num_levels - 1).shape.as_list()
+        initial_flow_shape = [
+            batch_size, smallest_level_shape[1] / 2,
+            smallest_level_shape[2] / 2, 2
+        ]
+        # Initialize zero flow.
+        last_flow = tf.zeros(initial_flow_shape, dtype=tf.float32)
+
+        # The very last (0-th) level for the pyramid is not used in the paper,
+        # instead the flow is just upsampled by 2x. If it were used, the input
+        # feature maps would have to be raw images (i.e. NxNx3).
+        pyramid_levels_to_use = range(num_levels - 1, 0, -1)
+        estimator_net = []
+        for lvl in pyramid_levels_to_use:
+            estimator_net.append(
+                OpticalFlowEstimator(
+                    pyramid1.get_level(lvl), pyramid2.get_level(lvl),
+                    last_flow, options))
+            last_flow = estimator_net[-1].get_flow()
+        return estimator_net
+
+    @staticmethod
+    def _verify_input(x1, x2):
+        log.check_eq(x1.dtype, tf.uint8)
+        log.check_eq(x2.dtype, tf.uint8)
+        log.check_eq(4, len(x1.shape))
+        log.check_eq(4, len(x2.shape))
+        log.check_eq(x1.shape[1:4].as_list(), x2.shape[1:4].as_list())
+        log.check_eq(3, x1.shape[3], message="Must be a three channel image.")
+
+    @staticmethod
+    def _verify_left_is_half_scale_of_right(shape1, shape2):
+        log.check_eq(len(shape1), len(shape2))
+        log.check_eq(len(shape1), 4)
+        log.check_eq(shape1[1], shape2[1] / 2)
+        log.check_eq(shape1[2], shape2[2] / 2)
+
+    @staticmethod
+    def _convert_to_float_and_normalize(x):
+        return (tf.cast(x, dtype='float32') - 128.0) / 128.0
+
+
+class PWCNetTrainer:
+    """
+    Class that creates a PWC network and attaches training losses.
+    USAGE:
+    >>> trainer = PWCNetTrainer(x1, x2, y, training_options, net_options)
+    >>> net = trainer.get_network() # returns the network (if you need if for
+    >>>                             # some reason.
+    >>> loss = trainer.get_loss()   # can be fed into session.run call.
+    >>> # network options and training options can be inspected using the
+    >>> # following two calls:
+    >>> trainer.get_training_options()
+    >>> trainer.get_pwc_options()
+    """
+
+    class Options:
+        LOSS_WEIGHTS = [0.32, 0.08, 0.02, 0.01, 0.005]
+        USE_ANGULAR_LOSS = True
+
+    def __init__(self,
+                 x1,
+                 x2,
+                 groundtruth,
+                 weights=None,
+                 train_options=None,
+                 pwc_options=None):
+        PWCNetTrainer._verify_inputs(x1, x2, groundtruth, weights)
+
+        self.train_options = train_options if train_options is not None \
+            else PWCNetTrainer.Options()
+        self.pwc_options = pwc_options if pwc_options is not None \
+            else PWCNet.Options()
+
+        # Instantiate network.
+        self.pwcnet = PWCNet(x1, x2, self.pwc_options)
+        # Add training losses.
+        self._add_training_loss(self.pwcnet, groundtruth, weights)
+        # Add statistics for network layers.
+        PWCNetTrainer._add_pwc_variable_summary(self.pwcnet)
+
+    def get_loss(self):
+        return self.total_loss
+
+    def get_training_options(self):
+        return self.train_options
+
+    def get_pwc_options(self):
+        return self.pwc_options
+
+    def get_network(self):
+        return self.pwcnet
+
+    def get_output_flow(self):
+        return self.pwcnet.get_output_flow()
+
+    def _add_training_loss(self, pwcnet, groundtruth, weights=None):
+        """ Adds training losses """
+        self.endpoint_loss = PWCNetTrainer._get_endpoint_error_loss(
+            pwcnet, self.train_options.LOSS_WEIGHTS, groundtruth, weights)
+        if self.train_options.USE_ANGULAR_LOSS:
+            self.angular_loss = PWCNetTrainer._get_angular_error_loss(
+                pwcnet, self.train_options.LOSS_WEIGHTS, groundtruth, weights)
+        else:
+            self.angular_loss = [tf.Variable(0.0, trainable=False)]
+
+        self.total_loss = sum(self.angular_loss) + sum(self.endpoint_loss)
+        tf.summary.scalar('total_loss', self.total_loss)
+
+    def get_loss(self):
+        return self.total_loss
+
+    @staticmethod
+    def _verify_inputs(x1, x2, groundtruth, weights=None):
+        log.check_eq(4, len(x1.shape))
+        log.check_eq(4, len(x2.shape))
+        log.check_eq(4, len(groundtruth.shape))
+        log.check_eq(x1.shape[1:4], x2.shape[1:4])
+        log.check_eq(x1.shape[1:3], groundtruth.shape[1:3])
+        log.check_eq(2, groundtruth.shape[3])
+        if weights is not None:
+            log.check_eq(4, len(weights.shape))
+            dlog.check_eq(x1.shape[1:3], weights.shape[1:3])
+
+    @staticmethod
+    def _add_pwc_variable_summary(net):
+        """ Adds statistics for most interesting layers in the network. """
+        with tf.name_scope('pyramid1'):
+            for i in range(net.pyramid1.num_levels()):
+                with tf.name_scope('level{}'.format(i)):
+                    variable_summary(net.pyramid1.get_level(i))
+        with tf.name_scope('pyramid2'):
+            for i in range(net.pyramid2.num_levels()):
+                with tf.name_scope('level{}'.format(i)):
+                    variable_summary(net.pyramid2.get_level(i))
+        for estimator_net in net.estimator_net:
+            flow = estimator_net.get_flow()
+            with tf.name_scope('flow_{}x{}'.format(flow.shape[1],
+                                                   flow.shape[2])):
+                variable_summary(flow)
+
+    @staticmethod
+    def _get_endpoint_error_loss(net, loss_weights, groundtruth, weights=None):
+        """ Returns scaled endpoint error losses. """
+        losses = []
+        log.check_eq(len(net.estimator_net) + 1, len(loss_weights), \
+            ("You do not have an appropriate number of loss weights. "
+             "Should have {}".format(1 + len(net.estimator_net))))
+        with tf.name_scope('endpoint_loss'):
+            for i, w in enumerate(loss_weights):
+                if i < len(loss_weights) - 1:
+                    prediction = net.estimator_net[i].get_flow()
+                else:
+                    if net.options.use_context_net is False:
+                        log.warn(
+                            'Context network is not set up, so there is no ' +
+                            'need to penalize flow at the finest resolution.')
+                        break
+                    prediction = net.get_output_flow()
+
+                loss_name = '{}x{}'.format(prediction.shape[1],
+                                           prediction.shape[2])
+                loss = tf_utils.endpoint_loss_at_scale(prediction, groundtruth,
+                                                       weights) * w
+                tf.summary.scalar(loss_name, loss)
+                losses.append(loss)
+        return losses
+
+    @staticmethod
+    def _get_angular_error_loss(net, loss_weights, groundtruth, weights=None):
+        """ Returns scaled angular error losses. """
+        losses = []
+        log.check_eq(len(net.estimator_net), len(loss_weights) - 1, \
+            "You do not have an appropriate number of loss weights.")
+
+        with tf.name_scope('angular_loss'):
+            for i, w in enumerate(loss_weights):
+                if i < len(loss_weights) - 1:
+                    prediction = net.estimator_net[i].get_flow()
+                else:
+                    if net.options.use_context_net is False:
+                        log.warn(
+                            'Context network is not set up, so there is no ' +
+                            'need to penalize flow at the finest resolution.')
+                        break
+                    prediction = net.get_output_flow()
+                
+                loss_name = '{}x{}'.format(prediction.shape[1],
+                                           prediction.shape[2])
+                loss = tf_utils.angular_loss_at_scale(prediction, groundtruth,
+                                                      weights) * w
+                tf.summary.scalar(loss_name, loss)
+                losses.append(loss)
+        return losses
+
+
+def _maybe_add_batch_norm_or_activation_fn(entree,
+                                           use_batch_norm=False,
+                                           is_training=None,
+                                           activation_fn=tf.nn.relu,
+                                           reuse=None,
+                                           scope=None,
+                                           bn_epsilon=1e-2,
+                                           bn_decay=0.9999):
+    """
+    Either returns the provided activation function (e.g. ReLU) applied to the
+    input, or applies batch norm and activation function and returns it.
+    """
+    if use_batch_norm:
+        log.check(is_training is not None,
+                  ('You specified that batch_norm should be used, but '
+                   '"is_training" parameter was not set!'))
+        return batch_norm(
+            entree,
+            epsilon=bn_epsilon,
+            decay=bn_decay,
+            activation_fn=activation_fn,
+            is_training=is_training,
+            reuse=reuse,
+            scope=scope,
+            updates_collections=None)
+    else:
+        return tf.nn.relu(entree)

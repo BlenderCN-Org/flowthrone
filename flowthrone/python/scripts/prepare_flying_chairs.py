@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import dataset_utils
 import numpy as np
 import tensorflow as tf
-
+import random
 
 def get_input_files(args):
     flying_chairs_path = os.path.join(args.dataset_path, 'data')

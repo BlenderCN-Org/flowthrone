@@ -1,7 +1,13 @@
 import tensorflow as tf
 
 
-def resample_flow(uv, out_shape):
+def resample_flow(uv, out_shape, name = None):
+    """ Rescales flow field. """
+    label = 'resample_flow_{}x{}'.format(out_shape[1], out_shape[2])
+    with tf.name_scope(name, label, [uv]):
+        return _resample_flow(uv, out_shape)
+    
+def _resample_flow(uv, out_shape):
     """ Rescales flow field. """
     assert uv.shape[3] == 2, "Flow field must have two channels!"
     uv_shape = uv.get_shape().as_list()
@@ -24,6 +30,36 @@ def resample_flow(uv, out_shape):
     # On the other hand, JIT-XLA does not work well with the current CUDA/driver
     # pair, so this discussion is moot.
     return tf.image.resize_images(uv, [out_shape[0], out_shape[1]]) * scale_x
+
+
+def _get_translation_list_for_correlation(max_shift):
+    return [[dx, dy] for dx in range(-max_shift, max_shift+1) \
+            for dy in range(-max_shift, max_shift+1)]
+
+
+def correlation_layer(x, y, max_shift):
+    """
+    Simple implementation of a correlation layer used in FlowNet and PWC.
+    Note that this does computes correlation over 1x1 patches -- this is a
+    simplification taken in both papers.
+
+    :param x: input feature map (BxHxWxC)
+    :param y: input feature map (BxHxWxC -- same as x).
+    :param max_shift: largest shift to be applied to the feature map. This
+                      controls the dimensionality of the output feature map,
+                      which will have (2*max_shift+1)*(2*max_shift+1) channels.
+    """
+    assert len(x.shape) == 4
+    assert x.shape[1:] == y.shape[1:]
+
+    outs = []
+    for tx in _get_translation_list_for_correlation(max_shift):
+        y_tx = tf.contrib.image.translate(y, tx)
+        # One expected this line to be actual correlation, rather than just a
+        # dot product, but Flownet actually used 'dot-product' version as well:
+        # see eq. 1 and notice in section 5.1, it is stated that 'k=0'.
+        outs.append(tf.reduce_mean(tf.multiply(x, y_tx), axis=3))
+    return tf.transpose(tf.convert_to_tensor(outs), perm=[1, 2, 3, 0])
 
 
 def angular_flow_error(x, y, w=None):
@@ -52,6 +88,65 @@ def angular_flow_error(x, y, w=None):
         return tf.acos(ratio)
 
 
+def endpoint_loss_at_scale(prediction, groundtruth, weights=None):
+    """
+    Calculates endpoint loss (a scalar) at a given scale.
+    'groundtruth' and 'weights' are given at the original scale, while
+    prediction (optical flow) may be at a coarser scale.
+    If the scales are different, loss is computed by downscaling groundtruth
+    and weights.
+    Weights are optional (they may be zero in occluded regions, or in regions
+    where groundtruth is unknown).
+    """
+    with tf.name_scope(None, 'endpoint_loss', [prediction, groundtruth]):
+        return _endpoint_loss_at_scale(prediction, groundtruth, weights)
+
+
+def _endpoint_loss_at_scale(prediction, groundtruth, weights=None):
+    if not prediction.shape == groundtruth.shape:
+        sz = [prediction.shape[1], prediction.shape[2]]
+        groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
+        if weights is not None:
+            weights_scaled = tf.image.resize_images(weights, sz)
+        else:
+            weights_scaled = None
+        return tf.reduce_mean(
+            endpoint_flow_error(prediction, groundtruth_scaled,
+                                weights_scaled))
+    else:
+        return tf.reduce_mean(
+            endpoint_flow_error(prediction, groundtruth, weights))
+
+
+def angular_loss_at_scale(prediction, groundtruth, weights=None):
+    """
+    Returns the angular loss (a scalar) at a given scale.
+    'groundtruth' and 'weights' are given at the original scale, while
+    prediction (optical flow) may be at a coarser scale.
+    If the scales are different, loss is computed by downscaling groundtruth
+    and weights.
+    Weights are optional (they may be zero in occluded regions, or in regions
+    where groundtruth is unknown).
+    """
+    with tf.name_scope(None, 'angular_loss', [prediction, groundtruth]):
+        return _angular_loss_at_scale(prediction, groundtruth, weights)
+
+
+def _angular_loss_at_scale(prediction, groundtruth, weights=None):
+    if not prediction.shape == groundtruth.shape:
+        sz = [prediction.shape[1], prediction.shape[2]]
+        if weights is not None:
+            weights_scaled = tf.image.resize_images(weights, sz)
+        else:
+            weights_scaled = None
+        groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
+        return tf.reduce_mean(
+            angular_flow_error(groundtruth_scaled, prediction, weights_scaled))
+    else:
+        return tf.reduce_mean(
+            angular_flow_error(groundtruth, prediction, weights))
+
+
 def endpoint_flow_error(prediction, groundtruth, weights=None):
     """ Returns squared euclidean error over the flow field. """
     if weights is not None:
@@ -74,7 +169,12 @@ def l2_warp_error(images0, images1, uv, weights=None):
         return compute_residual(images0, images1, uv)**2
 
 
-def warp_with_flow(images, uv):
+def warp_with_flow(images, uv, name=None):
+    """ Warps a batch of images (a 4D tensor) by the provided optical flow. """
+    with tf.name_scope(name, 'warp_with_flow', [images, uv]):
+        return _warp_with_flow(images, uv)
+
+def _warp_with_flow(images, uv):
     """ Warps a batch of images (a 4D tensor) by the provided optical flow. """
     assert images.dtype == uv.dtype
     assert len(images.shape) == 4, "Tensor must have four dimensions!"
