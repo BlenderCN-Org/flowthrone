@@ -54,6 +54,8 @@ from tensorflow.contrib.slim import l2_regularizer
 from tensorflow.contrib.layers import batch_norm
 import glog as log
 
+GLOBAL_L2_REGULARIZATION = 1e-9
+
 
 class OpticalFlowEstimator:
     """
@@ -79,7 +81,7 @@ class OpticalFlowEstimator:
     class Options:
         def __init__(self):
             self.MAX_SHIFT = 1
-            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
             self.NUM_FILTERS = [128, 64, 64, 32, 2]
             # cost-volume / correlation layer hasn't been properly vetted, so
             # 'off' by default.
@@ -96,15 +98,21 @@ class OpticalFlowEstimator:
 
         name = 'OpticalFlowEstimator_{}x{}'.format(x1.shape[1], x1.shape[2])
         with tf.name_scope(None, name, [x1, x2, uv]):
-            self.x2_warped = tf_utils.warp_with_flow(x2,
-                                                     tf_utils.resample_flow(
-                                                         uv, x2.shape))
+            uv_upsampled = tf_utils.resample_flow(uv, x2.shape)
+            self.x2_warped = tf_utils.warp_with_flow(x2, uv_upsampled)
             if self.options.USE_COST_VOLUME:
                 self.cost_volume = tf_utils.correlation_layer(
                     x1, self.x2_warped, self.options.MAX_SHIFT)
-                network_tail = tf.concat([self.cost_volume, x1], axis=3)
+                # TODO(vasiliy): it is very unfortunate that uv_upsampled was
+                # originally incorrectly omitted from this line.
+                # It may be worthwhile to 'normalize it' (something similar is
+                # mentioned in the paper) to avoid values from increasing over
+                # different layers.
+                network_tail = tf.concat(
+                    [self.cost_volume, x1, uv_upsampled], axis=3)
             else:
-                network_tail = tf.concat([x1, self.x2_warped], axis=3)
+                network_tail = tf.concat(
+                    [x1, self.x2_warped, uv_upsampled], axis=3)
                 self.cost_volume = None
             self.layers = self._make_network_spine(network_tail)
 
@@ -152,7 +160,8 @@ class OpticalFlowEstimator:
         outputs = [entree]
         for outs in self.options.NUM_FILTERS[0:-1]:
             outputs.append(
-                self._conv2d_rectified(outputs[-1], num_outputs=outs))
+                self._conv2d_rectified(
+                    outputs[-1], num_outputs=outs))
         # Add the final layer without ReLU following it.
         log.check_eq(
             2,
@@ -170,8 +179,10 @@ class OpticalFlowEstimator:
         """ Wrapper around conv2d. """
         use_batch_norm = self.options.is_training is not None
         return _maybe_add_batch_norm_or_activation_fn(
-            self._conv2d(entree, num_outputs), use_batch_norm,
-            self.options.is_training)
+            self._conv2d(entree, num_outputs),
+            use_batch_norm,
+            self.options.is_training,
+            activation_fn=tf.nn.leaky_relu)
 
     def _conv2d(self, entree, num_outputs):
         """
@@ -220,7 +231,7 @@ class FeaturePyramidExtractor:
 
     class Options:
         def __init__(self):
-            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
             self.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
             # If set to something other than 'None', will apply batch
             # normalization.
@@ -248,6 +259,13 @@ class FeaturePyramidExtractor:
                         num_outputs=outs,
                         stride=1,
                         scope='conv{}b'.format(index)))
+                # third layer is present in the pytorch implementation ?!
+                self.layers.append(
+                    self._conv2d_rectified(
+                        self.layers[-1],
+                        num_outputs=outs,
+                        stride=1,
+                        scope='conv{}c'.format(index)))
 
     def num_levels(self):
         return len(self.options.NUM_FILTERS) + 1
@@ -258,7 +276,7 @@ class FeaturePyramidExtractor:
             two conv layers). """
         log.check_ge(index, 0)
         log.check_le(index, self.options.NUM_FILTERS)
-        return self.layers[2 * index]
+        return self.layers[3 * index]
 
     def debug_info(self):
         """ Prints layers """
@@ -273,7 +291,8 @@ class FeaturePyramidExtractor:
             use_batch_norm,
             self.options.is_training,
             reuse=tf.AUTO_REUSE,
-            scope=scope)
+            scope=scope,
+            activation_fn=tf.nn.leaky_relu)
 
     def _conv2d(self, entree, num_outputs, stride, scope):
         """
@@ -320,9 +339,10 @@ class ContextEstimator:
 
     class Options:
         def __init__(self):
-            self.L2_REGULARIZATION_SCALE = 1e-3
+            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
             self.NUM_FILTERS = [128, 128, 128, 96, 64, 32]
             self.NUM_DILATIONS = [1, 2, 4, 8, 16, 1]
+            self.is_training = None
 
     def __init__(self, entree, uv, opt=None):
         ContextEstimator._verify_input(entree, uv)
@@ -353,7 +373,8 @@ class ContextEstimator:
 
     def _make_network_spine(self, inp):
         log.check_eq(
-            len(self.options.NUM_FILTERS), len(self.options.NUM_DILATIONS),
+            len(self.options.NUM_FILTERS),
+            len(self.options.NUM_DILATIONS),
             'NUM_FILTERS and NUM_DILATIONS must be equally sized!')
         layers = [inp]
         for i in range(len(self.options.NUM_FILTERS)):
@@ -365,7 +386,8 @@ class ContextEstimator:
         return layers
 
     def _conv2d(self, entree, num_outputs, rate):
-        return conv2d(
+        use_batch_norm = self.options.is_training is not None
+        conv_layer = conv2d(
             entree,
             num_outputs=num_outputs,
             kernel_size=3,
@@ -374,7 +396,12 @@ class ContextEstimator:
             rate=rate,
             weights_regularizer=l2_regularizer(
                 self.options.L2_REGULARIZATION_SCALE),
-            activation_fn=tf.nn.relu)
+            activation_fn=None)
+        return _maybe_add_batch_norm_or_activation_fn(
+            conv_layer,
+            use_batch_norm,
+            self.options.is_training,
+            activation_fn=tf.nn.leaky_relu)
 
     @staticmethod
     def _verify_input(entree, uv):
@@ -394,7 +421,7 @@ class PWCNet:
             self.pyramid_opt = FeaturePyramidExtractor.Options()
             self.estimator_opt = OpticalFlowEstimator.Options()
             self.context_opt = ContextEstimator.Options()
-            self.use_context_net = False
+            self.use_context_net = True
 
     def __init__(self, x1, x2, options=None):
         self.options = PWCNet.Options() if options is None else options
@@ -461,13 +488,20 @@ class PWCNet:
 
     @staticmethod
     def _initialize_flow_estimators(pyramid1, pyramid2, options):
+        log.check(isinstance(options, dict))
+
         batch_size = tf.shape(pyramid1.get_level(0))[0]
         # get the shape of the last level in the pyramid, and downscale it by
         # 2 to get the initial (null) flow shape.
         num_levels = pyramid1.num_levels()
 
-        smallest_level_shape = pyramid1.get_level(
-            num_levels - 1).shape.as_list()
+        # Reverse levels, since this is how we wil lbe iterating over them
+        # below.
+        pyramid_levels_to_use = sorted(options.keys())
+        pyramid_levels_to_use.reverse()
+
+        smallest_level_shape = \
+            pyramid1.get_level(pyramid_levels_to_use[0]).shape.as_list()
         initial_flow_shape = [
             batch_size, smallest_level_shape[1] / 2,
             smallest_level_shape[2] / 2, 2
@@ -478,15 +512,53 @@ class PWCNet:
         # The very last (0-th) level for the pyramid is not used in the paper,
         # instead the flow is just upsampled by 2x. If it were used, the input
         # feature maps would have to be raw images (i.e. NxNx3).
-        pyramid_levels_to_use = range(num_levels - 1, 0, -1)
         estimator_net = []
         for lvl in pyramid_levels_to_use:
+            print lvl, pyramid1.get_level(lvl)
+            if isinstance(options, dict):
+                opts = options[lvl]
+            else:
+                opts = options
             estimator_net.append(
                 OpticalFlowEstimator(
-                    pyramid1.get_level(lvl), pyramid2.get_level(lvl),
-                    last_flow, options))
+                    pyramid1.get_level(lvl),
+                    pyramid2.get_level(lvl), last_flow, opts))
             last_flow = estimator_net[-1].get_flow()
         return estimator_net
+
+    #@staticmethod
+    #def _initialize_flow_estimators(pyramid1, pyramid2, options):
+    #    batch_size = tf.shape(pyramid1.get_level(0))[0]
+    #    # get the shape of the last level in the pyramid, and downscale it by
+    #    # 2 to get the initial (null) flow shape.
+    #    num_levels = pyramid1.num_levels()
+
+    #    smallest_level_shape = pyramid1.get_level(num_levels -
+    #                                              1).shape.as_list()
+    #    initial_flow_shape = [
+    #        batch_size, smallest_level_shape[1] / 2,
+    #        smallest_level_shape[2] / 2, 2
+    #    ]
+    #    # Initialize zero flow.
+    #    last_flow = tf.zeros(initial_flow_shape, dtype=tf.float32)
+
+    #    # The very last (0-th) level for the pyramid is not used in the paper,
+    #    # instead the flow is just upsampled by 2x. If it were used, the input
+    #    # feature maps would have to be raw images (i.e. NxNx3).
+    #    pyramid_levels_to_use = range(num_levels - 1, 0, -1)
+    #    estimator_net = []
+    #    for lvl in pyramid_levels_to_use:
+    #        print lvl, pyramid1.get_level(lvl)
+    #        if isinstance(options, dict):
+    #            opts = options[lvl]
+    #        else:
+    #            opts = options
+    #        estimator_net.append(
+    #            OpticalFlowEstimator(
+    #                pyramid1.get_level(lvl),
+    #                pyramid2.get_level(lvl), last_flow, opts))
+    #        last_flow = estimator_net[-1].get_flow()
+    #    return estimator_net
 
     @staticmethod
     def _verify_input(x1, x2):
@@ -522,10 +594,12 @@ class PWCNetTrainer:
     >>> trainer.get_training_options()
     >>> trainer.get_pwc_options()
     """
+    MAXIMUM_FLOW_VALUE = 50.0
 
     class Options:
         LOSS_WEIGHTS = [0.32, 0.08, 0.02, 0.01, 0.005]
         USE_ANGULAR_LOSS = True
+        USE_HUBER_LOSS = None
 
     def __init__(self,
                  x1,
@@ -563,13 +637,39 @@ class PWCNetTrainer:
     def get_output_flow(self):
         return self.pwcnet.get_output_flow()
 
+    def get_magic_scale_value(self):
+        return self.MAXIMUM_FLOW_VALUE
+
+    def _initialize_scaled_groundtruth(self, pwcnet, groundtruth):
+        # Initializes a map from size (height or width) to 'groundtruth' flow.
+        self.groundtruth = {}
+
+        dim = groundtruth.shape.as_list()[1]
+        self.groundtruth[dim] = groundtruth
+
+        # At this point we can apply some scaling factors to the flow.
+        for estimator in pwcnet.estimator_net:
+            p_shape = estimator.get_flow().shape.as_list()
+            scale_x = p_shape[1] / float(groundtruth.shape.as_list()[1])
+            scale_y = p_shape[2] / float(groundtruth.shape.as_list()[2])
+            log.check_eq(scale_x, scale_y)
+
+            dim = p_shape[1]
+            self.groundtruth[dim] = tf_utils.resample_flow(groundtruth,
+                                                           p_shape)
+
     def _add_training_loss(self, pwcnet, groundtruth, weights=None):
         """ Adds training losses """
+        # Figure out how many
+        self._initialize_scaled_groundtruth(pwcnet, groundtruth)
+
         self.endpoint_loss = PWCNetTrainer._get_endpoint_error_loss(
-            pwcnet, self.train_options.LOSS_WEIGHTS, groundtruth, weights)
+            pwcnet, self.train_options.LOSS_WEIGHTS, self.groundtruth, weights,
+            self.train_options.USE_HUBER_LOSS)
         if self.train_options.USE_ANGULAR_LOSS:
             self.angular_loss = PWCNetTrainer._get_angular_error_loss(
-                pwcnet, self.train_options.LOSS_WEIGHTS, groundtruth, weights)
+                pwcnet, self.train_options.LOSS_WEIGHTS, self.groundtruth,
+                weights)
         else:
             self.angular_loss = [tf.Variable(0.0, trainable=False)]
 
@@ -604,14 +704,19 @@ class PWCNetTrainer:
                     variable_summary(net.pyramid2.get_level(i))
         for estimator_net in net.estimator_net:
             flow = estimator_net.get_flow()
-            with tf.name_scope('flow_{}x{}'.format(flow.shape[1],
-                                                   flow.shape[2])):
+            with tf.name_scope(
+                    'flow_{}x{}'.format(flow.shape[1], flow.shape[2])):
                 variable_summary(flow)
 
     @staticmethod
-    def _get_endpoint_error_loss(net, loss_weights, groundtruth, weights=None):
+    def _get_endpoint_error_loss(net,
+                                 loss_weights,
+                                 groundtruths,
+                                 weights=None,
+                                 use_huber_loss=False):
         """ Returns scaled endpoint error losses. """
         losses = []
+        log.check_eq(len(groundtruths), len(loss_weights))
         log.check_eq(len(net.estimator_net) + 1, len(loss_weights), \
             ("You do not have an appropriate number of loss weights. "
              "Should have {}".format(1 + len(net.estimator_net))))
@@ -627,20 +732,34 @@ class PWCNetTrainer:
                         break
                     prediction = net.get_output_flow()
 
-                loss_name = '{}x{}'.format(prediction.shape[1],
-                                           prediction.shape[2])
-                loss = tf_utils.endpoint_loss_at_scale(prediction, groundtruth,
-                                                       weights) * w
+                dim = prediction.shape.as_list()[1]
+                loss_name = '{}x{}'.format(dim, dim)
+
+                gt_at_scale = groundtruths[dim]
+                log.check_eq(gt_at_scale.shape.as_list()[1],
+                             prediction.shape.as_list()[1])
+                log.check_eq(gt_at_scale.shape.as_list()[2],
+                             prediction.shape.as_list()[2])
+
+                if use_huber_loss:
+                    loss = tf_utils.endpoint_huber_loss_at_scale(
+                        prediction, gt_at_scale, weights) * w
+                else:
+                    loss = tf_utils.endpoint_loss_at_scale(
+                        prediction, gt_at_scale, weights) * w
+
                 tf.summary.scalar(loss_name, loss)
                 losses.append(loss)
         return losses
 
     @staticmethod
-    def _get_angular_error_loss(net, loss_weights, groundtruth, weights=None):
+    def _get_angular_error_loss(net, loss_weights, groundtruths, weights=None):
         """ Returns scaled angular error losses. """
         losses = []
+        log.check_eq(len(groundtruths), len(loss_weights))
         log.check_eq(len(net.estimator_net), len(loss_weights) - 1, \
             "You do not have an appropriate number of loss weights.")
+        RELATIVE_WEIGHT = 1  #0.01
 
         with tf.name_scope('angular_loss'):
             for i, w in enumerate(loss_weights):
@@ -653,11 +772,18 @@ class PWCNetTrainer:
                             'need to penalize flow at the finest resolution.')
                         break
                     prediction = net.get_output_flow()
-                
-                loss_name = '{}x{}'.format(prediction.shape[1],
-                                           prediction.shape[2])
-                loss = tf_utils.angular_loss_at_scale(prediction, groundtruth,
-                                                      weights) * w
+
+                dim = prediction.shape.as_list()[1]
+                gt_at_scale = groundtruths[dim]
+                loss_name = '{}x{}'.format(dim, dim)
+
+                log.check_eq(gt_at_scale.shape.as_list()[1],
+                             prediction.shape.as_list()[1])
+                log.check_eq(gt_at_scale.shape.as_list()[2],
+                             prediction.shape.as_list()[2])
+
+                loss = tf_utils.angular_loss_at_scale(
+                    prediction, gt_at_scale, weights) * w * RELATIVE_WEIGHT
                 tf.summary.scalar(loss_name, loss)
                 losses.append(loss)
         return losses
@@ -666,11 +792,11 @@ class PWCNetTrainer:
 def _maybe_add_batch_norm_or_activation_fn(entree,
                                            use_batch_norm=False,
                                            is_training=None,
-                                           activation_fn=tf.nn.relu,
+                                           activation_fn=tf.nn.leaky_relu,
                                            reuse=None,
                                            scope=None,
                                            bn_epsilon=1e-2,
-                                           bn_decay=0.9999):
+                                           bn_decay=0.9):
     """
     Either returns the provided activation function (e.g. ReLU) applied to the
     input, or applies batch norm and activation function and returns it.
@@ -689,4 +815,4 @@ def _maybe_add_batch_norm_or_activation_fn(entree,
             scope=scope,
             updates_collections=None)
     else:
-        return tf.nn.relu(entree)
+        return activation_fn(entree)

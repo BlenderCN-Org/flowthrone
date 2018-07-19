@@ -5,6 +5,49 @@ import utils
 import random
 import numpy as np
 import tensorflow as tf
+import glog as log
+
+class SDHomDataset:
+    _train_file_list = []
+    _val_file_list = []
+    _all_file_list = []
+
+    _FLOW_MATCHER = None
+    _IMG1_FN = None
+    _IMG2_FN = None
+
+    def train_files(self):
+        return self._train_file_list
+
+    def val_files(self):
+        return self._val_file_list
+
+    def all_files(self):
+        return self._all_file_list
+
+    def __init__(self, dataset_path):
+        dataset_path = os.path.join(dataset_path, 'data')
+        self._train_file_list = self.get_files(dataset_path, 'train')
+        self._val_file_list = self.get_files(dataset_path, 'test')
+        self._all_file_list = self._train_file_list + self._val_file_list
+
+    def get_files(self, dataset_path, kind):
+        self._FLOW_MATCHER = '.pfm'
+        self._IMG1_FN = '.png'
+        self._IMG2_FN = '.png'
+        
+        flo_files = sorted([f for f in \
+                os.listdir(os.path.join(dataset_path, kind, 'flow')) \
+                            if f.endswith(self._FLOW_MATCHER)])
+        files = []
+        for i, f in enumerate(flo_files):
+            flo_fn = os.path.join(dataset_path, kind, 'flow', f)
+            i1_fn = os.path.join(dataset_path, kind, 't0',
+                                 f.replace(self._FLOW_MATCHER, self._IMG1_FN))
+            i2_fn = os.path.join(dataset_path, kind, 't1',
+                                 f.replace(self._FLOW_MATCHER, self._IMG2_FN))
+            files.append([flo_fn, i1_fn, i2_fn])
+        return files
 
 
 class Dataset:
@@ -84,7 +127,10 @@ class Dataset:
 
 def read_triplet(flo_fn, img1_fn, img2_fn):
     """ Reads and returns a triplet. """
-    flow = utils.read_flo(flo_fn)
+    if flo_fn.endswith('pfm'):
+        flow = utils.read_pfm(flo_fn) 
+    else: 
+        flow = utils.read_flo(flo_fn)
     img1 = cv2.imread(img1_fn)
     img2 = cv2.imread(img2_fn)
     return [flow, img1, img2]

@@ -7,74 +7,106 @@ import tensorflow as tf
 from tensorflow.python.client import timeline
 import numpy as np
 import time
+import pwcnet
 from pwcnet import PWCNet, PWCNetTrainer
 from training_manager import TrainingManager, \
         get_visualization_summary, variable_summary
 
 # Configuration used to run the training task.
+SHOULD_AUGMENT_DATASET=False
 config = {
-    'num_iterations': 1000000,
-    'batch_size': 256,
-    'learning_rate': 1e-3,
+    'num_iterations': 10000000,
+    'batch_size': 20,
+    'learning_rate': 0.01,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
-    'momentum': 0.95,
-    'image_size': 64,
+    'optimizer': 'ADAM',
+    'momentum': 0.9,
+    'adam_beta1': 0.95,
+    'adam_beta2': 0.999,
+    'image_size': 256,
     # Whether to augment training set.
-    'augment_by_flips': True,
+    'augment_by_flips': False,
     'augment_by_brightness_contrast': True,
-    'augment_by_transpose': True,
+    'augment_by_transpose': False,
     # Path to the directory with images/groundtruth flow.
-    'input_tf_records_train': '/data/flying_chairs_64x64_train.tfrecords',
-    'input_tf_records_test': '/data/flying_chairs_64x64_test.tfrecords',
+    #'input_tf_records_train': '/data/sdhom_chairs_256x256_train.tfrecords',
+    #'input_tf_records_test': '/data/sdhom_chairs_256x256_test.tfrecords',
+    'input_tf_records_train': '/data/flying_chairs_256x256_train.tfrecords',
+    'input_tf_records_test': '/data/flying_chairs_256x256_test.tfrecords',
     'shuffle': False,
     # How often to save model/checkpoint.
     'save_model_iter': 1000000,
     'save_checkpoint_iter': 10000,
-    'test_batch_iter': 100,  # how often to evaluate on a test batch
-    'visualization_iter': 1000,  # how often to save images
+    'test_batch_iter': 500,  # how often to evaluate on a test batch
+    'visualization_iter': 2000,  # how often to save images
     'print_iter': 10,  # how often to print stuff
-
     # Experiment results will be written to:
     #   base_path/exp_name/{checkpoints, models}
     'base_path': '/persistent-tmp/',
-    'exp_name': 'pwcnet64x64v1',
+    'exp_name': 'flying_chairs_256x256',
     # Wipe any data in the provided path (destroying any previous results),
     # and start anew.
     'fresh_start': False,
 }
 
 manager = TrainingManager(config)
+#manager.run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
 
 imsize = config['image_size']
 # Placeholders for input images.
-handle = tf.placeholder(tf.string, shape=[])
-iterator = tf.data.Iterator.from_string_handle(
-    handle, manager.dataset_train.output_types,
-    manager.dataset_train.output_shapes)
-x1, x2, y = iterator.get_next()
-
-train_iterator = manager.dataset_train.make_one_shot_iterator()
-test_iterator = manager.dataset_test.make_one_shot_iterator()
+with tf.device('/cpu:0'):
+    handle = tf.placeholder(tf.string, shape=[])
+    iterator = tf.data.Iterator.from_string_handle(
+        handle, manager.dataset_train.output_types,
+        manager.dataset_train.output_shapes)
+    x1, x2, y = iterator.get_next()
+    train_iterator = manager.dataset_train.make_one_shot_iterator()
+    test_iterator = manager.dataset_test.make_one_shot_iterator()
 
 # If you don't care about batch_norm, then set this to 'None'.
 is_training = tf.Variable(True, dtype=tf.bool, name='is_training')
 
-# image dimensions: 64 -> 32 -> 16 -> 8
+# image dimensions: 64 -> 32 -> 16 -> 8 -> 4
 pwc_options = PWCNet.Options()
-pwc_options.pyramid_opt.NUM_FILTERS = [32, 64, 64]
+pwc_options.pyramid_opt.NUM_FILTERS = [16, 32, 64, 128, 128, 128]
 # The same number of filters is used at different pyramid levels, which is
 # strange (one expects that the number of parameters for estimating small
 # coarse flow fields could be smaller).
-pwc_options.estimator_opt.NUM_FILTERS = [64, 64, 64, 64, 2]
+pwc_options.estimator_opt = {}
+for lvl in [4, 3, 2, 1]: #[5, 4, 3, 2, 1]:
+    pwc_options.estimator_opt[lvl] = pwcnet.OpticalFlowEstimator.Options()
+    #if lvl == 5:
+    #    pwc_options.estimator_opt[lvl].NUM_FILTERS = [2]
+    #if lvl == 4:
+    #    pwc_options.estimator_opt[lvl].NUM_FILTERS = [2]
+
+    pwc_options.estimator_opt[lvl].MAX_SHIFT = 1
+    pwc_options.estimator_opt[lvl].is_training = is_training
+    pwc_options.estimator_opt[lvl].USE_COST_VOLUME = True
+    
+    if lvl == 4:
+        pwc_options.estimator_opt[lvl].NUM_FILTERS = [128, 128, 128, 128, 2]
+    if lvl == 3:
+        pwc_options.estimator_opt[lvl].NUM_FILTERS = [128, 128, 128, 128, 2]
+    if lvl == 2:
+        pwc_options.estimator_opt[lvl].NUM_FILTERS = [128, 128, 128, 128, 2]
+    if lvl == 1:
+        pwc_options.estimator_opt[lvl].NUM_FILTERS = [128, 128, 128, 128, 2]
+
 
 pwc_options.pyramid_opt.is_training = is_training
-pwc_options.estimator_opt.is_training = is_training
+pwc_options.use_context_net = True
+pwc_options.context_opt.is_training = is_training
+#pwc_options.context_opt.
+#pwc_options.estimator_opt.is_training = is_training
 
 pwc_train_options = PWCNetTrainer.Options()
-pwc_train_options.USE_ANGULAR_LOSS = False
+pwc_train_options.USE_ANGULAR_LOSS = True
 # The last weight is currently unused, since we don't use a context network.
-pwc_train_options.LOSS_WEIGHTS = [0.5, 0.5, 0.25, np.nan]
+pwc_train_options.LOSS_WEIGHTS = [2.0, 1.0, 1.0, 0.5, 0.25]
+#pwc_train_options.LOSS_WEIGHTS = [0.0, 0.0, 0.0, 0.0, 1.0, np.nan]
+pwc_train_options.USE_HUBER_LOSS = False
 
 # Instantiate network with attached losses.
 trainer = PWCNetTrainer(
@@ -86,15 +118,17 @@ trainer = PWCNetTrainer(
 loss = trainer.get_loss()
 prediction = tf.identity(trainer.get_output_flow(), name='prediction')
 
+prediction_1 = trainer.get_network().get_raw_flow(1)
+prediction_2 = trainer.get_network().get_raw_flow(2)
+
 # Config to turn on JIT compilation
 session_config = tf.ConfigProto()
+session_config.gpu_options.allow_growth = False
 # Doesn't work due to CUDA/nvidia driver combination.
 #session_config.graph_options.optimizer_options.global_jit_level = \
 #        tf.OptimizerOptions.ON_1
 
 with tf.Session(config=session_config) as sess:
-    manager.restore_from_last_checkpoint_if_possible(sess)
-
     # The `Iterator.string_handle()` method returns a tensor that can be
     # evaluated and used to feed the `handle` placeholder.
     train_itr_handle = sess.run(train_iterator.string_handle())
@@ -106,8 +140,15 @@ with tf.Session(config=session_config) as sess:
     for var in [x1, x2, y, prediction]:
         tf.add_to_collection('vars', var)
     tf.summary.scalar('learning_rate', manager.learning_rate)
+    
     with tf.name_scope('prediction'):
         variable_summary(prediction)
+
+    for dim in sorted(trainer.groundtruth.keys()):
+        gt = trainer.groundtruth[dim]
+        gt_name = 'groundtruth_{}x{}'.format(gt.shape[1], gt.shape[2])
+        with tf.name_scope(gt_name):
+            variable_summary(gt)
 
     manager.restore_from_last_checkpoint_if_possible(sess)
     manager.setup_train_writer(sess)
@@ -132,7 +173,12 @@ with tf.Session(config=session_config) as sess:
             options=manager.run_options,
             run_metadata=manager.run_metadata)
         t_end = time.time()
-        manager.add_train_writer_summary(summary, iter)
+        
+        #manager.write_step_stats_timeline('/tmp/blah_{:3d}.json'.format(iter))
+        
+        if iter % 100 == 0:
+            manager.add_train_writer_summary(summary, iter)
+        
         if iter % config['print_iter'] == 0:
             print ("On iteration {}, loss = {}, iteration took {:.4f} sec;"
                    "since last call: {:.4f} sec").format(
@@ -154,20 +200,42 @@ with tf.Session(config=session_config) as sess:
             # Add summaries for results at the three finest scales.
             if iter % config['visualization_iter'] == 0:
                 num = 10
-                y_test, y_pred_tests = sess.run(
-                    [y, prediction],
+                sess_outs = sess.run(
+                    [y, prediction, prediction_1, prediction_2],
                     feed_dict={is_training: False,
                                handle: test_itr_handle})
 
-                for y_pred_test in [y_pred_tests]:
+                y_gt = sess_outs[0]
+                y_pred_tests = sess_outs[1:]
+                for y_pred_test in y_pred_tests:
                     name = 'visualization-{}x{}'.format(y_pred_test.shape[1],
                                                         y_pred_test.shape[2])
+                    print name
                     image_summary = get_visualization_summary(
                         sess,
                         y_pred_test[0:num, :, :, :],
-                        y_test[0:num, :, :, :],
+                        y_gt[0:num, :, :, :],
                         summary_name=name)
                     manager.add_test_writer_summary(image_summary, iter)
+                # Another attempt for training set.
+                sess_outs = sess.run(
+                    [y, prediction, prediction_1, prediction_2],
+                    feed_dict={is_training: False,
+                               handle: train_itr_handle})
+
+                y_gt = sess_outs[0]
+                y_preds = sess_outs[1:]
+                for y_pred in y_preds:
+                    name = 'train-visualization-{}x{}'.format(y_pred.shape[1],
+                                                              y_pred.shape[2])
+                    image_summary = get_visualization_summary(
+                        sess,
+                        y_pred[0:num, :, :, :],
+                        y_gt[0:num, :, :, :],
+                        summary_name=name)
+                    manager.add_test_writer_summary(image_summary, iter)
+
+
             t_end = time.time()
             print "Test iteration took {:.4f} sec".format(t_end - t_start)
 

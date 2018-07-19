@@ -1,5 +1,5 @@
 import tensorflow as tf
-
+import glog as log
 
 def resample_flow(uv, out_shape, name = None):
     """ Rescales flow field. """
@@ -29,7 +29,7 @@ def _resample_flow(uv, out_shape):
     # purposes?
     # On the other hand, JIT-XLA does not work well with the current CUDA/driver
     # pair, so this discussion is moot.
-    return tf.image.resize_images(uv, [out_shape[0], out_shape[1]]) * scale_x
+    return tf.image.resize_images(uv, [out_shape[0], out_shape[1]], align_corners=True) * scale_x
 
 
 def _get_translation_list_for_correlation(max_shift):
@@ -72,7 +72,7 @@ def angular_flow_error(x, y, w=None):
     """
     assert x.shape[3] == 2, "Flow field must have two channels!"
     assert y.shape[3] == 2, "Flow field must have two channels!"
-    epsilon = 1e-2
+    epsilon = 1e-3
     num = 1.0 + x[:, :, :, 0] * y[:, :, :, 0] + x[:, :, :, 1] * y[:, :, :, 1]
     den1 = tf.sqrt(1.0 + x[:, :, :, 0] * x[:, :, :, 0] + x[:, :, :, 1] *
                    x[:, :, :, 1] + epsilon)
@@ -86,6 +86,33 @@ def angular_flow_error(x, y, w=None):
         return tf.acos(ratio) * tf.reduce_mean(w, axis=3)
     else:
         return tf.acos(ratio)
+
+
+def endpoint_huber_loss_at_scale(prediction, groundtruth, weights=None):
+    """
+    Calculates endpoint loss (a scalar) at a given scale.
+    'groundtruth' and 'weights' are given at the original scale, while
+    prediction (optical flow) may be at a coarser scale.
+    If the scales are different, loss is computed by downscaling groundtruth
+    and weights.
+    Weights are optional (they may be zero in occluded regions, or in regions
+    where groundtruth is unknown).
+    """
+    with tf.name_scope(None, 'endpoint_huber_loss', [prediction, groundtruth]):
+        return _endpoint_huber_loss_at_scale(prediction, groundtruth, weights)
+
+
+def _endpoint_huber_loss_at_scale(prediction, groundtruth, weights=None):
+    log.check(weights is None)
+    HUBER_DELTA = 0.25
+    if not prediction.shape == groundtruth.shape:
+        sz = [prediction.shape[1], prediction.shape[2]]
+        groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
+        return tf.reduce_mean(tf.losses.huber_loss(
+            prediction, groundtruth_scaled, delta=HUBER_DELTA))
+    else:
+        return tf.reduce_mean(tf.losses.huber_loss(
+            prediction, groundtruth, delta=HUBER_DELTA))
 
 
 def endpoint_loss_at_scale(prediction, groundtruth, weights=None):

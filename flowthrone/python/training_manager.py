@@ -66,7 +66,7 @@ class TrainingManager:
         if config['augment_by_brightness_contrast']:
             self.dataset_train = self.dataset_train.map(
                 lambda x1, x2, y: dataset_utils.adjust_tf_example_brightness_contrast(
-                    x1, x2, y, contrast=[0.5, 1.5], brightness=[-0.125, 0.125]),
+                    x1, x2, y, contrast=[0.75, 1.25], brightness=[-0.125, 0.125]),
                 num_parallel_calls=config['batch_size'])
         if config['augment_by_transpose']:
             self.dataset_train = self.dataset_train.map(
@@ -172,9 +172,9 @@ class TrainingManager:
     def add_train_writer_summary(self, summary, iteration):
         self._train_writer.add_summary(summary, iteration)
 
-    def write_step_stats_timeline(self, run_metadata, output_filename):
+    def write_step_stats_timeline(self, output_filename):
         from tensorflow.python.client import timeline
-        fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+        fetched_timeline = timeline.Timeline(self.run_metadata.step_stats)
         chrome_trace = fetched_timeline.generate_chrome_trace_format()
         with open(output_filename, 'w') as fid:
             fid.write(chrome_trace)
@@ -194,9 +194,20 @@ class TrainingManager:
         self.global_step = tf.Variable(0, trainable=False)
         self.learning_rate = self._get_exponential_decay_learning_rate(
             self.global_step)
-        return tf.train.MomentumOptimizer(
-            learning_rate=self.learning_rate,
-            momentum=self._config['momentum']).minimize(loss, self.global_step)
+        if self._config['optimizer'] == 'SGD':
+            return tf.train.MomentumOptimizer(
+                learning_rate=self.learning_rate,
+                momentum=self._config['momentum'],
+                use_nesterov=True).minimize(
+                        loss, self.global_step)
+        elif self._config['optimizer'] == 'ADAM':
+            return tf.train.AdamOptimizer(
+                learning_rate=self.learning_rate,
+                beta1=self._config['adam_beta1'],
+                beta2=self._config['adam_beta2']).minimize(
+                        loss, self.global_step)
+        else:
+            assert "UNRECOGNIZED OPTIMIZER TYPE"
 
     def _sigint_handler(self, signum, frame):
         """ Sets a member variable if sigint was captured. """
@@ -239,9 +250,8 @@ def get_flow_images(prediction, groundtruth, idx):
         if not flow_gt.shape[0] == flow_pred.shape[0] or \
                 not flow_gt.shape[1] == flow_pred.shape[1]:
             flow_gt = resample_flow(flow_gt, flow_pred.shape)
-        flow_gt = compute_flow_color(uv=flow_gt)
-        flow_pred = compute_flow_color(uv=flow_pred)
-        flow_images.append(np.concatenate([flow_gt, flow_pred], axis=1))
+        flow_cat = np.concatenate([flow_gt, flow_pred], axis=1)
+        flow_images.append(compute_flow_color(uv=flow_cat))
     return np.concatenate(flow_images, axis=1)
 
 
