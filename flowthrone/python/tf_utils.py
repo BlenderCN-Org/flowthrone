@@ -29,7 +29,7 @@ def _resample_flow(uv, out_shape):
     # purposes?
     # On the other hand, JIT-XLA does not work well with the current CUDA/driver
     # pair, so this discussion is moot.
-    return tf.image.resize_images(uv, [out_shape[0], out_shape[1]], align_corners=True) * scale_x
+    return tf.image.resize_images(uv, [out_shape[0], out_shape[1]]) * scale_x
 
 
 def _get_translation_list_for_correlation(max_shift):

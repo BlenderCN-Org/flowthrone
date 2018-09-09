@@ -41,6 +41,9 @@ Classes are organized roughly as follows:
     optical flow methods).
 """
 
+### NOTE: TODO(vasiliy): L2 regularization does not get added as a loss, and
+### therefore does not play a role in optimization at all.
+
 # Add parent directory to pythonpath.
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
