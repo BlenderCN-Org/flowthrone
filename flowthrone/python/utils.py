@@ -8,15 +8,16 @@ import numpy as np
 import sys
  
 
-def read_pfm(file):
-    file = open(file, 'rb')
+def read_pfm(filename):
+    """ Reads binary .pfm file into a numpy array (cv::Mat) """
+    fid = open(filename, 'rb')
     color = None
     width = None
     height = None
     scale = None
     endian = None
 
-    header = file.readline().rstrip()
+    header = fid.readline().rstrip()
     if header == 'PF':
         color = True
     elif header == 'Pf':
@@ -30,14 +31,14 @@ def read_pfm(file):
     else:
         raise Exception('Malformed PFM header.')
 
-    scale = float(file.readline().rstrip())
+    scale = float(fid.readline().rstrip())
     if scale < 0: # little-endian
         endian = '<'
         scale = -scale
     else:
         endian = '>' # big-endian
 
-    data = np.fromfile(file, endian + 'f')
+    data = np.fromfile(fid, endian + 'f')
     shape = (height, width, 3) if color else (height, width)
 
     data = np.reshape(data, shape)

@@ -7,6 +7,8 @@ option cc_enable_arenas = true;
 message OpticalFlowTensorFlowModelOptions {
   // Path to the directory containing tensorflow SavedModelBundle.
   optional string export_dir = 1;
+  // Path to the file with frozen graph weights.
+  optional string frozen_graph_filename = 8;
 
   // Names of the input tensors.
   repeated string input_tensor_name = 4;
