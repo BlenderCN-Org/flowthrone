@@ -130,7 +130,7 @@ target_link_libraries(test_utils
 SET(CONFIG_PBTXT ${CMAKE_CURRENT_BINARY_DIR}/config/flowthrone.pbtxt)
 configure_file(flowthrone/config/flowthrone.pbtxt ${CONFIG_PBTXT} COPYONLY)
 
-set(CURRENT_TF_MODEL "model_v8_384x384")
+set(CURRENT_TF_MODEL "pwcnet_256x256_v1")
 set(LOCAL_CURRENT_TF_MODEL ${CMAKE_CURRENT_BINARY_DIR}/${CURRENT_TF_MODEL})
 # After copying the default pbtxt, edit it in place with the full-path to the
 # downloaded trained network.
@@ -145,8 +145,8 @@ if(NOT TF_MODEL_DOWNLOADED)
   #execute_process(COMMAND wget https://www.dropbox.com/s/ivhyrzsi9bfv8bh/model_v3_128x128.tar.gz)
   #execute_process(COMMAND wget https://www.dropbox.com/s/lmwmc0trqekw32n/model_v5_128x128.tar.gz)
   #execute_process(COMMAND wget https://www.dropbox.com/s/u99za2th00ubn19/model_v6_256x256.tar.gz)
-  execute_process(COMMAND wget https://www.dropbox.com/s/7lqha3r329cgf8r/model_v8_384x384.tar.gz)
-  
+  #execute_process(COMMAND wget https://www.dropbox.com/s/7lqha3r329cgf8r/model_v8_384x384.tar.gz)
+  execute_process(COMMAND wget https://www.dropbox.com/s/t4i4rybeut1u531/pwcnet_256x256_v1.tar.gz)
   message(STATUS "Trying to untar the tensorflow model...")
   execute_process(COMMAND tar -xvf ${CURRENT_TF_MODEL}.tar.gz)
   execute_process(COMMAND rm ${CURRENT_TF_MODEL}.tar.gz)
