@@ -277,11 +277,11 @@ std::vector<std::vector<float>> ExtractAndSortInInterval(
   // has the same number as the number of intervals.
   out = Reshape(out);
   for (auto& out_vec : out) {
-    std::sort(out_vec.begin(), out_vec.end());
     // Remove NaNs -- they affect percentiles in ways that are useless to us.
     out_vec.erase(std::remove_if(out_vec.begin(), out_vec.end(),
                                  [](float x) { return std::isnan(x); }),
                   out_vec.end());
+    std::sort(out_vec.begin(), out_vec.end());
   }
   return out;
 }
@@ -362,6 +362,7 @@ void FillPercentileMapWithElapsed(
     const RepeatedField<int>& percentiles,
     Map<int, EvaluationOutput::Result>& map) {
   auto values = SortedElapsedValues(results);
+  CHECK(std::is_sorted(values.begin(), values.end()));
   for (int percentile : percentiles) {
     int idx = (percentile / 100.0f) * (values.size() - 1);
     EvaluationOutput::Result& summary = map[percentile];
@@ -373,6 +374,7 @@ std::vector<float> ValuesForPercentile(
     const std::vector<std::vector<float>>& values, int percentile) {
   std::vector<float> percentile_values;
   for (const auto& v : values) {
+    CHECK(std::is_sorted(v.begin(), v.end()));
     if (v.empty()) {
       percentile_values.push_back(std::numeric_limits<float>::quiet_NaN());
     } else {

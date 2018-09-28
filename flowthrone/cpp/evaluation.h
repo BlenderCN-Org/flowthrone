@@ -3,8 +3,8 @@
 // S. Baker, D. Scharstein, J.P. Lewis, S. Roth, M. Black, R. Szelinski,
 // ICCV 2007.
 #pragma once
-#include <opencv2/core/core.hpp>
 #include <google/protobuf/repeated_field.h>
+#include <opencv2/core/core.hpp>
 #include "flowthrone.pb.h"
 
 namespace flowthrone {
