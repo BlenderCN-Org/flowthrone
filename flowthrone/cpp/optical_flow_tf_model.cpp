@@ -48,9 +48,19 @@ void CheckOutputSizeIsConsistent(const cv::Mat& I, const cv::Mat& flow) {
 OpticalFlowTensorFlowModel::OpticalFlowTensorFlowModel(
     const OpticalFlowTensorFlowModelOptions& opts)
     : opts_(opts) {
-  const std::string kModelTag = "train";
-  context_ = internal::Context::CreateFromSavedModel(opts, opts_.export_dir(),
-                                                     kModelTag);
+  LOG_IF(FATAL, !(opts_.has_export_dir() ^ opts_.has_frozen_graph_filename()))
+      << "Neither 'export_dir' not 'frozen_graph_filename' has been specified "
+         "in options, so the network can't be created. Specify one and exactly "
+         "one of the two fields.";
+  if (opts_.has_export_dir()) {
+    const std::string kModelTag = "train";
+    context_ = internal::Context::CreateFromSavedModel(opts, opts_.export_dir(),
+                                                       kModelTag);
+  } else if (opts_.has_frozen_graph_filename()) {
+    context_ = internal::Context::CreateFromFrozenGraph(
+        opts, opts_.frozen_graph_filename());
+  }
+  CHECK(context_);
 }
 
 OpticalFlowTensorFlowModel::~OpticalFlowTensorFlowModel() {}

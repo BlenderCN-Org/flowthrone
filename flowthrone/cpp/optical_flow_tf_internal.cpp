@@ -119,6 +119,13 @@ Context::~Context() {
   }
 }
 
+tf::SessionOptions CreateSessionOptions() {
+  tf::SessionOptions session_opts;
+  tf::GPUOptions* gpu_opts = session_opts.config.mutable_gpu_options();
+  gpu_opts->set_allow_growth(true);
+  return session_opts;
+}
+
 std::unique_ptr<Context> Context::CreateFromSavedModel(
     const OpticalFlowTensorFlowModelOptions& opts,
     const std::string& export_dir, const std::string& tag) {
@@ -127,16 +134,26 @@ std::unique_ptr<Context> Context::CreateFromSavedModel(
       << "Provided directory was: '" << opts.export_dir() << "'";
 
   tf::SavedModelBundle bundle;
-
-  tf::SessionOptions session_opts;
-  tf::GPUOptions* gpu_opts = session_opts.config.mutable_gpu_options();
-  gpu_opts->set_allow_growth(true);
-
+  tf::SessionOptions session_opts = CreateSessionOptions();
   CHECK_STATUS(tf::LoadSavedModel(session_opts, tf::RunOptions(), export_dir,
                                   {tag}, &bundle));
 
   return Context::Create(std::move(bundle.session),
                          bundle.meta_graph_def.graph_def(), opts);
+}
+
+std::unique_ptr<Context> Context::CreateFromFrozenGraph(
+    const OpticalFlowTensorFlowModelOptions& opts,
+    const std::string& frozen_graph_filename) {
+  tf::SessionOptions session_opts = CreateSessionOptions();
+  std::unique_ptr<tf::Session> session(tf::NewSession(session_opts));
+  CHECK(static_cast<bool>(session));
+
+  tf::GraphDef graph_def;
+  CHECK_STATUS(tf::ReadBinaryProto(tf::Env::Default(), frozen_graph_filename,
+                                   &graph_def));
+  CHECK_STATUS(session->Create(graph_def));
+  return Context::Create(std::move(session), graph_def, opts);
 }
 
 }  // namespace internal

@@ -98,8 +98,6 @@ for lvl in [4, 3, 2, 1]: #[5, 4, 3, 2, 1]:
 pwc_options.pyramid_opt.is_training = is_training
 pwc_options.use_context_net = True
 pwc_options.context_opt.is_training = is_training
-#pwc_options.context_opt.
-#pwc_options.estimator_opt.is_training = is_training
 
 pwc_train_options = PWCNetTrainer.Options()
 pwc_train_options.USE_ANGULAR_LOSS = True

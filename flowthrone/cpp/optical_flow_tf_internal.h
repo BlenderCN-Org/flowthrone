@@ -39,6 +39,12 @@ struct Context {
       const OpticalFlowTensorFlowModelOptions& opts,
       const std::string& export_dir, const std::string& tag);
 
+  // Creates and returns a Context object from a file contains frozen network
+  // graph and weights.
+  static std::unique_ptr<Context> CreateFromFrozenGraph(
+      const OpticalFlowTensorFlowModelOptions& opts,
+      const std::string& frozen_graph_filename);
+
   ~Context();
 
   // Given two images (possibly different resolutions, and not necessarily
