@@ -10,4 +10,8 @@ build/*
 webserver/flowthrone_pb2.py
 webserver/uploads/*
 *_pb2.py
+docs/_site/*
+docs/_site
+docs/.sass-cache                                                                     
+docs/.jekyll-metadata
 

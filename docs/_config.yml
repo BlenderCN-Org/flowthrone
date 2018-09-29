@@ -1,0 +1,26 @@
+title: FLOWTHRONE
+email: karasev00@gmail.com
+description: >- # this means to ignore newlines until "baseurl:"
+  FLOWTHRONE is an open-source C++ library for dense deep-learned optical flow.
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "" # the base hostname & protocol for your site, e.g. http://example.com
+github_username:  vasiliykarasev
+
+# Build settings
+markdown: kramdown
+theme: jekyll-theme-minimal
+show_downloads: true
+#plugins:
+#  - jekyll-feed
+
+# Exclude from processing.
+# The following items will not be processed, by default. Create a custom list
+# to override the default setting.
+# exclude:
+#   - Gemfile
+#   - Gemfile.lock
+#   - node_modules
+#   - vendor/bundle/
+#   - vendor/cache/
+#   - vendor/gems/
+#   - vendor/ruby/
