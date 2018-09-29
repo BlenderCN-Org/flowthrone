@@ -6,6 +6,12 @@ layout: default
 ---
 
 
-## [Getting Started](/installation)
+FLOWTHRONE is an open-source C++ library for dense deep-learned optical flow.
 
-## [Contents](/contents)
+<a href="https://vimeo.com/273840399">
+<img src="https://raw.githubusercontent.com/vasiliykarasev/flowthrone/gh-pages/docs/static/flowthrone-20180606.jpg"/>
+</a>
+
+## [Getting Started](installation)
+
+## [Contents](contents)

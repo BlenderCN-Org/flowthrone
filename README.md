@@ -7,7 +7,7 @@ Dense and deep optical flow.
 </a>
 
 
-Details are here [FLOWTHRONE](http://www.flowthrone.science)
+Details are here [FLOWTHRONE](https://vasiliykarasev.github.io/flowthrone/)
 
 ## contact
 
