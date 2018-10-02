@@ -12,6 +12,8 @@ FLOWTHRONE is an open-source C++ library for dense deep-learned optical flow.
 <img src="https://raw.githubusercontent.com/vasiliykarasev/flowthrone/gh-pages/docs/static/flowthrone-20180606.jpg"/>
 </a>
 
-## [Getting Started](installation)
+### [Results](results)
 
-## [Contents](contents)
+### [Installation](installation)
+
+### [Contents](contents)

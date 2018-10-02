@@ -189,9 +189,8 @@ figure figcaption {
   border-right: 1px solid rgba(128, 128, 128, 0.25);
 }
 
-.table .id {
+.table .id { }
 
-}
 .table .ae {
   color: #787777;
   font-weight: 500;
