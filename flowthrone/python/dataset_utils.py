@@ -6,8 +6,116 @@ import random
 import numpy as np
 import tensorflow as tf
 import glog as log
+import re
+
+def valid_datasets():
+    return [
+        x.__name__ for x in [SintelDataset, SDHomDataset, FlyingChairsDataset]
+    ]
+
+
+def create_dataset(kind, path):
+    log.check(kind in valid_datasets())
+    if kind == FlyingChairsDataset.__name__:
+        return FlyingChairsDataset(path)
+    if kind == SDHomDataset.__name__:
+        return SDHomDataset(path)
+    if kind == SintelDataset.__name__:
+        return SintelDataset(path)
+    log.fatal('You did not specify a valid dataset type {}'.format(kind))
+
+
+class SintelDataset:
+    """ Helper class for loading Sintel dataset. """
+
+    def all_files(self):
+        return self._all_file_list
+
+    def train_files(self):
+        return self._train_file_list
+
+    def val_files(self):
+        return self._val_file_list
+
+    def __init__(self, dataset_path, num_splits=10):
+        # Sintel is split into sequences, and the 'test' set can't be used
+        # for validation, since the groundtruth flow is not provided.
+        flow_path = os.path.join(dataset_path, 'training', 'flow')
+        seqs = sorted([
+            s for s in os.listdir(flow_path) if os.path.isdir(os.path.join(flow_path, s))])
+        log.check_gt(
+            len(seqs), 0, 'Did not find any sequences -- is the path correct?')
+        train_seqs, val_seqs = self._split_sequences(seqs, num_splits)
+
+        self._train_file_list = []
+        self._val_file_list = []
+        self._all_file_list = []
+
+        for seq in train_seqs:
+            self._train_file_list += self._process_sequence(dataset_path, seq)
+        for seq in val_seqs:
+            self._val_file_list += self._process_sequence(dataset_path, seq)
+        self._all_file_list = self._train_file_list + self._val_file_list
+
+    def _split_sequences(self, sequences, num_splits):
+        train_seqs = []
+        val_seqs = []
+        for i, seq in enumerate(sequences):
+            if i % num_splits == 0:
+                val_seqs.append(seq)
+            else:
+                train_seqs.append(seq)
+        return train_seqs, val_seqs
+
+    def _process_sequence(self, dataset_path, seq):
+        flow_path = os.path.join(dataset_path, 'training', 'flow', seq)
+        img_path = os.path.join(dataset_path, 'training', 'final', seq)
+        flo_files = sorted([f for f in os.listdir(flow_path) if f.endswith('flo')])
+        output = []
+        for f in flo_files:
+            idx = int(re.findall('frame_([0-9]+).flo', f)[0])
+            img1_base_filename = 'frame_{:04d}.png'.format(idx)
+            img2_base_filename = 'frame_{:04d}.png'.format(idx + 1)
+            flo_filename = os.path.join(flow_path, f)
+            img1_filename = os.path.join(img_path, img1_base_filename)
+            img2_filename = os.path.join(img_path, img2_base_filename)
+
+            Dataset._check_files_exist(flo_filename, img1_filename,
+                                       img2_filename)
+            output.append([flo_filename, img1_filename, img2_filename])
+        return output
+
+
+class FlyingChairsDataset:
+    """ Helper class for loading FlyingChairs dataset. """
+
+    def train_files(self):
+        return self._dataset.train_files()
+
+    def val_files(self):
+        return self._dataset.val_files()
+
+    def all_files(self):
+        return self._dataset.all_files()
+
+    def __init__(self, dataset_path, num_splits=10):
+        self._dataset = Dataset(
+            dataset_path,
+            num_splits=num_splits,
+            matchers=flying_chairs_matchers())
+
 
 class SDHomDataset:
+    """ Helper class for loading SDHom dataset
+        (https://lmb.informatik.uni-freiburg.de/resources/datasets/FlyingChairs.en.html#chairssdhom)
+
+        USAGE:
+         >>> dataset = SDHomDataset('/path/to/my/flow/dataset/')
+         >>> train_files = dataset.train_files()
+         >>> val_files = dataset.val_files()
+         >>> all_files = dataset.all_files()
+
+    """
     _train_file_list = []
     _val_file_list = []
     _all_file_list = []
@@ -27,15 +135,15 @@ class SDHomDataset:
 
     def __init__(self, dataset_path):
         dataset_path = os.path.join(dataset_path, 'data')
-        self._train_file_list = self.get_files(dataset_path, 'train')
-        self._val_file_list = self.get_files(dataset_path, 'test')
+        self._train_file_list = self._get_files(dataset_path, 'train')
+        self._val_file_list = self._get_files(dataset_path, 'test')
         self._all_file_list = self._train_file_list + self._val_file_list
 
-    def get_files(self, dataset_path, kind):
+    def _get_files(self, dataset_path, kind):
         self._FLOW_MATCHER = '.pfm'
         self._IMG1_FN = '.png'
         self._IMG2_FN = '.png'
-        
+
         flo_files = sorted([f for f in \
                 os.listdir(os.path.join(dataset_path, kind, 'flow')) \
                             if f.endswith(self._FLOW_MATCHER)])
@@ -125,11 +233,15 @@ class Dataset:
                                  flo_fn, i1_fn, i2_fn))
 
 
+def flying_chairs_matchers():
+    return ['flow.flo', 'img1.ppm', 'img2.ppm']
+
+
 def read_triplet(flo_fn, img1_fn, img2_fn):
     """ Reads and returns a triplet. """
     if flo_fn.endswith('pfm'):
-        flow = utils.read_pfm(flo_fn) 
-    else: 
+        flow = utils.read_pfm(flo_fn)
+    else:
         flow = utils.read_flo(flo_fn)
     img1 = cv2.imread(img1_fn)
     img2 = cv2.imread(img2_fn)
