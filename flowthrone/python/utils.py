@@ -18,12 +18,7 @@ def read_pfm(filename):
     endian = None
 
     header = fid.readline().rstrip()
-    if header == 'PF':
-        color = True
-    elif header == 'Pf':
-        color = False
-    else:
-        raise Exception('Not a PFM file.')
+    log.check_eq(header, 'PF', 'Maybe this is not a PFM file?')
 
     dim_match = re.match(r'^(\d+)\s(\d+)\s$', file.readline())
     if dim_match:
@@ -34,12 +29,11 @@ def read_pfm(filename):
     scale = float(fid.readline().rstrip())
     if scale < 0: # little-endian
         endian = '<'
-        scale = -scale
     else:
         endian = '>' # big-endian
 
     data = np.fromfile(fid, endian + 'f')
-    shape = (height, width, 3) if color else (height, width)
+    shape = (height, width, 3)
 
     data = np.reshape(data, shape)
     data = np.flipud(data)
