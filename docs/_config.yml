@@ -6,7 +6,7 @@ description: >- # this means to ignore newlines until "baseurl:"
 url: "http://vasiliykarasev.github.io"
 baseurl: "/flowthrone"
 github_username:  vasiliykarasev
-
+google_analytics: UA-24988729-2
 # Build settings
 markdown: kramdown
 theme: jekyll-theme-minimal
