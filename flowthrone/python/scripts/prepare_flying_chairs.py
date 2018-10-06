@@ -8,11 +8,10 @@ import numpy as np
 import tensorflow as tf
 import random
 
+
 def get_input_files(args):
-    flying_chairs_path = os.path.join(args.dataset_path, 'data')
-    matchers = ['flow.flo', 'img1.ppm', 'img2.ppm']
-    dataset = dataset_utils.Dataset(
-        flying_chairs_path, num_splits=10, matchers=matchers)
+    dataset = dataset_utils.create_dataset(args.dataset_type,
+                                           args.dataset_path)
     if args.kind == 'train':
         return dataset.train_files()
     elif args.kind == 'val':
@@ -25,6 +24,7 @@ def get_input_files(args):
 
 def main(args):
     files = get_input_files(args)
+    print "Found {} files.".format(len(files))
     target_size = [args.target_size, args.target_size]
 
     record_writer = tf.python_io.TFRecordWriter(args.output_filename)
@@ -35,25 +35,37 @@ def main(args):
             remaining_files = set(range(len(files)))
         fn_idx = random.choice(list(remaining_files))
         remaining_files -= {fn_idx}
-        print "Writing example {} to {}".format(idx, args.output_filename)
+        if idx % 100 == 0:
+            print "Writing example {} to {}".format(idx, args.output_filename)
 
         triplet = dataset_utils.read_triplet(\
                 files[fn_idx][0], files[fn_idx][1], files[fn_idx][2])
-        flow, img1, img2 = dataset_utils.generate_example(triplet, target_size)
+        flow, img1, img2 = dataset_utils.generate_example(
+            triplet, target_size, scale_range=[0.1, 0.5])
 
         img1 = img1.astype(dtype=np.uint8)
         img2 = img2.astype(dtype=np.uint8)
         flow = flow.astype(dtype=np.float32)
         example = dataset_utils.as_tf_example(img1, img2, flow)
         record_writer.write(example)
+    print "Wrote {} examples to {}".format(args.num_examples,
+                                           args.output_filename)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='''
+    Script for loading standard datasets and creating files with TFRecords
+    for training.
+    ''')
+    parser.add_argument(
+        '--dataset_type',
+        choices=dataset_utils.valid_datasets(),
+        required=True,
+        help='Dataset type.')
     parser.add_argument(
         '--dataset_path',
         default=os.path.join(os.getenv('HOME'), 'data/FlyingChairs_release'),
-        help='Path to FlyingChairs dataset.')
+        help='Path to the dataset.')
     parser.add_argument(
         '--output_filename',
         default='',

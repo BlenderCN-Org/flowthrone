@@ -6,7 +6,7 @@ import struct
 import re
 import numpy as np
 import sys
- 
+import glog as log 
 
 def read_pfm(filename):
     """ Reads binary .pfm file into a numpy array (cv::Mat) """
@@ -20,7 +20,7 @@ def read_pfm(filename):
     header = fid.readline().rstrip()
     log.check_eq(header, 'PF', 'Maybe this is not a PFM file?')
 
-    dim_match = re.match(r'^(\d+)\s(\d+)\s$', file.readline())
+    dim_match = re.match(r'^(\d+)\s(\d+)\s$', fid.readline())
     if dim_match:
         width, height = map(int, dim_match.groups())
     else:
