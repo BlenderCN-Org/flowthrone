@@ -101,7 +101,7 @@ void Context::RunInference(const cv::Mat& I0_in, const cv::Mat& I1_in,
   cv::resize(I1_in, I1, input_size);
   AsTensor(I0, &inputs_tf[0].second);
   AsTensor(I1, &inputs_tf[1].second);
-  CHECK_STATUS(session->Run(inputs_tf, output_names, {}, &outputs_tf));
+  TF_CHECK_OK(session->Run(inputs_tf, output_names, {}, &outputs_tf));
   CHECK_EQ(output_names.size(), outputs_tf.size());
 
   outputs->resize(output_names.size());
@@ -135,8 +135,8 @@ std::unique_ptr<Context> Context::CreateFromSavedModel(
 
   tf::SavedModelBundle bundle;
   tf::SessionOptions session_opts = CreateSessionOptions();
-  CHECK_STATUS(tf::LoadSavedModel(session_opts, tf::RunOptions(), export_dir,
-                                  {tag}, &bundle));
+  TF_CHECK_OK(tf::LoadSavedModel(session_opts, tf::RunOptions(), export_dir,
+                                 {tag}, &bundle));
 
   return Context::Create(std::move(bundle.session),
                          bundle.meta_graph_def.graph_def(), opts);
@@ -150,9 +150,9 @@ std::unique_ptr<Context> Context::CreateFromFrozenGraph(
   CHECK(static_cast<bool>(session));
 
   tf::GraphDef graph_def;
-  CHECK_STATUS(tf::ReadBinaryProto(tf::Env::Default(), frozen_graph_filename,
-                                   &graph_def));
-  CHECK_STATUS(session->Create(graph_def));
+  TF_CHECK_OK(tf::ReadBinaryProto(tf::Env::Default(), frozen_graph_filename,
+                                  &graph_def));
+  TF_CHECK_OK(session->Create(graph_def));
   return Context::Create(std::move(session), graph_def, opts);
 }
 

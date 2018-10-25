@@ -21,9 +21,6 @@ void AsMat(const tensorflow::Tensor& tensor, std::vector<cv::Mat>* x);
 // must be 1.
 void AsMat(const tensorflow::Tensor& tensor, cv::Mat* x);
 
-// CHECK the status and print an error if it is invalid.
-void CHECK_STATUS(const tensorflow::Status& s);
-
 // Returns a tensor from the graph. If the tensor is not found, returns a
 // nullptr.
 const tensorflow::NodeDef* GetTensorByName(const tensorflow::GraphDef& graph,
