@@ -41,9 +41,6 @@ Classes are organized roughly as follows:
     optical flow methods).
 """
 
-### NOTE: TODO(vasiliy): L2 regularization does not get added as a loss, and
-### therefore does not play a role in optimization at all.
-
 # Add parent directory to pythonpath.
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -336,8 +333,6 @@ class ContextEstimator:
     >>> [print layer for layer in net.layers ]
     >>> # the last element in that array is the 'delta' flow estimated by the
     >>> # network.
-
-    TODO(vasiliy): THIS CLASS DOES NOT CURRENTLY SUPPORT BATCH_NORM
     """
 
     class Options:
@@ -676,7 +671,11 @@ class PWCNetTrainer:
         else:
             self.angular_loss = [tf.Variable(0.0, trainable=False)]
 
-        self.total_loss = sum(self.angular_loss) + sum(self.endpoint_loss)
+        self.regularization_loss = tf.losses.get_regularization_loss()
+        tf.summary.scalar('regularization_loss', self.regularization_loss)
+
+        self.total_loss = sum(self.angular_loss) + sum(
+            self.endpoint_loss) + self.regularization_loss
         tf.summary.scalar('total_loss', self.total_loss)
 
     def get_loss(self):

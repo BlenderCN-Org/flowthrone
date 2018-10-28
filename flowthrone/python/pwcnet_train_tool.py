@@ -13,10 +13,10 @@ from training_manager import TrainingManager, \
         get_visualization_summary, variable_summary
 
 # Configuration used to run the training task.
-SHOULD_AUGMENT_DATASET=False
+SHOULD_AUGMENT_DATASET=True
 config = {
     'num_iterations': 10000000,
-    'batch_size': 20,
+    'batch_size': 10,
     'learning_rate': 0.01,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
@@ -24,16 +24,16 @@ config = {
     'momentum': 0.9,
     'adam_beta1': 0.95,
     'adam_beta2': 0.999,
-    'image_size': 256,
+    'image_size': 384,
     # Whether to augment training set.
-    'augment_by_flips': False,
+    'augment_by_flips': True,
     'augment_by_brightness_contrast': True,
-    'augment_by_transpose': False,
+    'augment_by_transpose': True,
     # Path to the directory with images/groundtruth flow.
     #'input_tf_records_train': '/data/sdhom_chairs_256x256_train.tfrecords',
     #'input_tf_records_test': '/data/sdhom_chairs_256x256_test.tfrecords',
-    'input_tf_records_train': '/data/flying_chairs_256x256_train.tfrecords',
-    'input_tf_records_test': '/data/flying_chairs_256x256_test.tfrecords',
+    'input_tf_records_train': '/data/flying_chairs_384x384_train.tfrecords',
+    'input_tf_records_test': '/data/flying_chairs_384x384_test.tfrecords',
     'shuffle': False,
     # How often to save model/checkpoint.
     'save_model_iter': 1000000,
@@ -44,7 +44,7 @@ config = {
     # Experiment results will be written to:
     #   base_path/exp_name/{checkpoints, models}
     'base_path': '/persistent-tmp/',
-    'exp_name': 'flying_chairs_256x256',
+    'exp_name': 'flying_chairs_384x384',
     # Wipe any data in the provided path (destroying any previous results),
     # and start anew.
     'fresh_start': False,
@@ -69,18 +69,13 @@ is_training = tf.Variable(True, dtype=tf.bool, name='is_training')
 
 # image dimensions: 64 -> 32 -> 16 -> 8 -> 4
 pwc_options = PWCNet.Options()
-pwc_options.pyramid_opt.NUM_FILTERS = [16, 32, 64, 128, 128, 128]
+pwc_options.pyramid_opt.NUM_FILTERS = [16, 32, 64, 64, 128, 128, 128]
 # The same number of filters is used at different pyramid levels, which is
 # strange (one expects that the number of parameters for estimating small
 # coarse flow fields could be smaller).
 pwc_options.estimator_opt = {}
-for lvl in [4, 3, 2, 1]: #[5, 4, 3, 2, 1]:
+for lvl in [5, 4, 3, 2, 1]:
     pwc_options.estimator_opt[lvl] = pwcnet.OpticalFlowEstimator.Options()
-    #if lvl == 5:
-    #    pwc_options.estimator_opt[lvl].NUM_FILTERS = [2]
-    #if lvl == 4:
-    #    pwc_options.estimator_opt[lvl].NUM_FILTERS = [2]
-
     pwc_options.estimator_opt[lvl].MAX_SHIFT = 1
     pwc_options.estimator_opt[lvl].is_training = is_training
     pwc_options.estimator_opt[lvl].USE_COST_VOLUME = True
@@ -101,10 +96,8 @@ pwc_options.context_opt.is_training = is_training
 
 pwc_train_options = PWCNetTrainer.Options()
 pwc_train_options.USE_ANGULAR_LOSS = True
-# The last weight is currently unused, since we don't use a context network.
-pwc_train_options.LOSS_WEIGHTS = [2.0, 1.0, 1.0, 0.5, 0.25]
-#pwc_train_options.LOSS_WEIGHTS = [0.0, 0.0, 0.0, 0.0, 1.0, np.nan]
-pwc_train_options.USE_HUBER_LOSS = False
+pwc_train_options.LOSS_WEIGHTS = [2.0, 1.0, 1.0, 1.0, 0.5, 0.5]
+pwc_train_options.USE_HUBER_LOSS = True
 
 # Instantiate network with attached losses.
 trainer = PWCNetTrainer(
