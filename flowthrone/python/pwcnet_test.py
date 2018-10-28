@@ -166,7 +166,9 @@ class PWCNetTest(unittest.TestCase):
         
         opt = PWCNet.Options()
         opt.pyramid_opt.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
-        opt.estimator_opt.NUM_FILTERS = [128, 128, 96, 64, 32, 2]
+        opt.estimator_opt = {}
+        for lvl in [6, 5, 4, 3, 2, 1]:
+          opt.estimator_opt[lvl] = OpticalFlowEstimator.Options()
 
         net = PWCNet(x1, x2, options=opt)
         flow = net.get_output_flow()

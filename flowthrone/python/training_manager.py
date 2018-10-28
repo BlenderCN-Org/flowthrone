@@ -7,7 +7,7 @@ import numpy as np
 import shutil
 import errno
 import signal
-
+import augmentation
 
 class TrainingManager:
     """
@@ -58,19 +58,19 @@ class TrainingManager:
         self.dataset_train = self.dataset_train.batch(config['batch_size'])
         if config['augment_by_flips']:
             self.dataset_train = self.dataset_train.map(
-                lambda x1, x2, y: dataset_utils.maybe_flip_tf_example_left_right(x1, x2, y),
+                lambda x1, x2, y: augmentation.maybe_flip_tf_example_left_right(x1, x2, y),
                 num_parallel_calls=config['batch_size'])
             self.dataset_train = self.dataset_train.map(
-                lambda x1, x2, y: dataset_utils.maybe_flip_tf_example_up_down(x1, x2, y),
+                lambda x1, x2, y: augmentation.maybe_flip_tf_example_up_down(x1, x2, y),
                 num_parallel_calls=config['batch_size'])
         if config['augment_by_brightness_contrast']:
             self.dataset_train = self.dataset_train.map(
-                lambda x1, x2, y: dataset_utils.adjust_tf_example_brightness_contrast(
+                lambda x1, x2, y: augmentation.adjust_tf_example_brightness_contrast(
                     x1, x2, y, contrast=[0.75, 1.25], brightness=[-0.125, 0.125]),
                 num_parallel_calls=config['batch_size'])
         if config['augment_by_transpose']:
             self.dataset_train = self.dataset_train.map(
-                lambda x1, x2, y: dataset_utils.maybe_transpose_tf_example(x1, x2, y),
+                lambda x1, x2, y: augmentation.maybe_transpose_tf_example(x1, x2, y),
                 num_parallel_calls=config['batch_size'])
 
         self.dataset_train = self.dataset_train.repeat()
