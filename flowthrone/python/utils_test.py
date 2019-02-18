@@ -121,5 +121,15 @@ class TestResampleFlow(unittest.TestCase):
         # Verify that in the occluded region residual is large.
         self.assertGreater(np.linalg.norm(uv_expected - uv_out), 0.0)
 
+
+class TestLoadPfm(unittest.TestCase):
+    @unittest.skip("Did not check in PFM file.")
+    def test_simple(self):
+        fn = '../testdata/04190.pfm'
+        image = utils.read_pfm(fn)
+        cv2.imshow("image", utils.compute_flow_color(image))
+        cv2.waitKey(0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
