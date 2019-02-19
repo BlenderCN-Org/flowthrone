@@ -27,7 +27,7 @@ class ModelPathHandle:
 
     def load_if_needed(self):
         if not os.path.exists(MODELS_PATH) or not os.path.exists(self.path):
-            load()
+            self.load()
         return
 
 
