@@ -16,7 +16,7 @@ from training_manager import TrainingManager, \
 SHOULD_AUGMENT_DATASET=True
 config = {
     'num_iterations': 10000000,
-    'batch_size': 10,
+    'batch_size': 8,
     'learning_rate': 0.01,
     'learning_rate_alpha': 0.9,
     'learning_rate_step': 100000,
@@ -26,14 +26,20 @@ config = {
     'adam_beta2': 0.999,
     'image_size': 384,
     # Whether to augment training set.
-    'augment_by_flips': True,
+    'augment_by_flips': False,
     'augment_by_brightness_contrast': True,
-    'augment_by_transpose': True,
+    'augment_by_transpose': False,
     # Path to the directory with images/groundtruth flow.
     #'input_tf_records_train': '/data/sdhom_chairs_256x256_train.tfrecords',
     #'input_tf_records_test': '/data/sdhom_chairs_256x256_test.tfrecords',
-    'input_tf_records_train': '/data/flying_chairs_384x384_train.tfrecords',
-    'input_tf_records_test': '/data/flying_chairs_384x384_test.tfrecords',
+    'input_tf_records_train': [
+        '/data/flying_chairs_384x384_train.tfrecords',
+        '/data/chairs_sdhom_384x384_train.tfrecords',
+    ],
+    'input_tf_records_test': [
+        '/data/flying_chairs_384x384_test.tfrecords',
+        '/data/chairs_sdhom_384x384_test.tfrecords',
+    ],
     'shuffle': False,
     # How often to save model/checkpoint.
     'save_model_iter': 1000000,
@@ -96,8 +102,8 @@ pwc_options.context_opt.is_training = is_training
 
 pwc_train_options = PWCNetTrainer.Options()
 pwc_train_options.USE_ANGULAR_LOSS = True
-pwc_train_options.LOSS_WEIGHTS = [2.0, 1.0, 1.0, 1.0, 0.5, 0.5]
-pwc_train_options.USE_HUBER_LOSS = True
+pwc_train_options.LOSS_WEIGHTS = [4.0, 2.0, 1.0, 1.0, 0.25, 0.125]
+pwc_train_options.USE_HUBER_LOSS = False
 
 # Instantiate network with attached losses.
 trainer = PWCNetTrainer(

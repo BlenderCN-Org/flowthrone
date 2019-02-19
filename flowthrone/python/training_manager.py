@@ -66,7 +66,7 @@ class TrainingManager:
         if config['augment_by_brightness_contrast']:
             self.dataset_train = self.dataset_train.map(
                 lambda x1, x2, y: augmentation.adjust_tf_example_brightness_contrast(
-                    x1, x2, y, contrast=[0.75, 1.25], brightness=[-0.125, 0.125]),
+                    x1, x2, y, contrast=[0.9, 1.1], brightness=[-0.125, 0.125]),
                 num_parallel_calls=config['batch_size'])
         if config['augment_by_transpose']:
             self.dataset_train = self.dataset_train.map(

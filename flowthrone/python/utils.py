@@ -142,9 +142,14 @@ def resample_flow(uv, out_shape):
     assert uv.shape[2] == 2, "Flow field must have two channels!"
     assert len(out_shape) == 2 or len(out_shape) == 3
 
-    scale_x = out_shape[0] / float(uv.shape[0])
-    scale_y = out_shape[1] / float(uv.shape[1])
-    uv_out = cv2.resize(uv, (out_shape[0], out_shape[1]))
+    in_width = uv.shape[1]
+    in_height = uv.shape[0]
+    out_width = out_shape[1]
+    out_height = out_shape[0]
+    scale_y = out_height / float(in_height)
+    scale_x = out_width / float(in_width)
+
+    uv_out = cv2.resize(uv, (out_width, out_height))
     uv_out[:, :, 0] *= scale_x
     uv_out[:, :, 1] *= scale_y
     return uv_out
