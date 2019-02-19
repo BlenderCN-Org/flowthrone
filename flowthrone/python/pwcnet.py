@@ -41,9 +41,6 @@ Classes are organized roughly as follows:
     optical flow methods).
 """
 
-### NOTE: TODO(vasiliy): L2 regularization does not get added as a loss, and
-### therefore does not play a role in optimization at all.
-
 # Add parent directory to pythonpath.
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -56,6 +53,7 @@ from tensorflow.contrib.slim import conv2d
 from tensorflow.contrib.slim import l2_regularizer
 from tensorflow.contrib.layers import batch_norm
 import glog as log
+import pickle
 
 GLOBAL_L2_REGULARIZATION = 1e-9
 
@@ -81,28 +79,17 @@ class OpticalFlowEstimator:
     >>>                                 # estimate.
     """
 
-    class Options:
-        def __init__(self):
-            self.MAX_SHIFT = 1
-            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
-            self.NUM_FILTERS = [128, 64, 64, 32, 2]
-            # cost-volume / correlation layer hasn't been properly vetted, so
-            # 'off' by default.
-            self.USE_COST_VOLUME = False
-            # Unless this is 'None', will apply batch_norm after each
-            # convolutional layer.
-            self.is_training = None
-
     def __init__(self, x1, x2, uv, opt=None):
         OpticalFlowEstimator._verify_shapes(x1, x2, uv)
 
         self.options = opt if opt is not None else \
-            OpticalFlowEstimator.Options()
+            OpticalFlowEstimatorOptions()
 
         name = 'OpticalFlowEstimator_{}x{}'.format(x1.shape[1], x1.shape[2])
         with tf.name_scope(None, name, [x1, x2, uv]):
             uv_upsampled = tf_utils.resample_flow(uv, x2.shape)
             self.x2_warped = tf_utils.warp_with_flow(x2, uv_upsampled)
+
             if self.options.USE_COST_VOLUME:
                 self.cost_volume = tf_utils.correlation_layer(
                     x1, self.x2_warped, self.options.MAX_SHIFT)
@@ -215,6 +202,21 @@ class OpticalFlowEstimator:
         log.check_eq(2 * int(uv.shape[1]), c1.shape[1])
         log.check_eq(2 * int(uv.shape[2]), c1.shape[2])
 
+class OpticalFlowEstimatorOptions:
+    def __init__(self):
+        self.MAX_SHIFT = 1
+        self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
+        self.NUM_FILTERS = [128, 64, 64, 32, 2]
+        # cost-volume / correlation layer hasn't been properly vetted, so
+        # 'off' by default.
+        self.USE_COST_VOLUME = False
+        # Unless this is 'None', will apply batch_norm after each
+        # convolutional layer.
+        self.is_training = None
+
+    def __str__(self):
+        return str(self.__class__) + ": " + str(self.__dict__)
+
 
 class FeaturePyramidExtractor:
     """
@@ -232,19 +234,11 @@ class FeaturePyramidExtractor:
     >>> net.layers
     """
 
-    class Options:
-        def __init__(self):
-            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
-            self.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
-            # If set to something other than 'None', will apply batch
-            # normalization.
-            self.is_training = None
-
     def __init__(self, entree, opt=None):
         """ Returns a network """
         FeaturePyramidExtractor._verify_input(entree)
         self.options = opt if opt is not None \
-            else FeaturePyramidExtractor.Options()
+            else FeaturePyramidExtractorOptions()
 
         self.layers = []
         self.layers.append(entree)
@@ -324,6 +318,18 @@ class FeaturePyramidExtractor:
         log.check_eq(entree.shape[-1], 3, "Input should have three channels.")
 
 
+class FeaturePyramidExtractorOptions:
+    def __init__(self):
+        self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
+        self.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
+        # If set to something other than 'None', will apply batch
+        # normalization.
+        self.is_training = None
+
+    def __str__(self):
+        return str(self.__class__) + ": " + str(self.__dict__)
+
+
 class ContextEstimator:
     """
     The context network that takes in a flow estimate and a feature map,
@@ -336,22 +342,13 @@ class ContextEstimator:
     >>> [print layer for layer in net.layers ]
     >>> # the last element in that array is the 'delta' flow estimated by the
     >>> # network.
-
-    TODO(vasiliy): THIS CLASS DOES NOT CURRENTLY SUPPORT BATCH_NORM
     """
-
-    class Options:
-        def __init__(self):
-            self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
-            self.NUM_FILTERS = [128, 128, 128, 96, 64, 32]
-            self.NUM_DILATIONS = [1, 2, 4, 8, 16, 1]
-            self.is_training = None
 
     def __init__(self, entree, uv, opt=None):
         ContextEstimator._verify_input(entree, uv)
 
         self.options = opt if opt is not None \
-            else ContextEstimator.Options()
+            else ContextEstimatorOptions()
 
         inp_concat = tf.concat([entree, uv], axis=3)
         with tf.name_scope('context'):
@@ -414,20 +411,23 @@ class ContextEstimator:
         log.check_eq(2, uv.shape[3])
 
 
+class ContextEstimatorOptions:
+    def __init__(self):
+        self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
+        self.NUM_FILTERS = [128, 128, 128, 96, 64, 32]
+        self.NUM_DILATIONS = [1, 2, 4, 8, 16, 1]
+        self.is_training = None
+
+    def __str__(self):
+        return str(self.__class__) + ": " + str(self.__dict__)
+
 class PWCNet:
     """
     Class that creates the network described in: arxiv.org/pdf/1709.02371.pdf
     """
 
-    class Options:
-        def __init__(self):
-            self.pyramid_opt = FeaturePyramidExtractor.Options()
-            self.estimator_opt = OpticalFlowEstimator.Options()
-            self.context_opt = ContextEstimator.Options()
-            self.use_context_net = True
-
     def __init__(self, x1, x2, options=None):
-        self.options = PWCNet.Options() if options is None else options
+        self.options = PWCNetOptions() if options is None else options
 
         PWCNet._verify_input(x1, x2)
         # One would normalize and rescale CV_8UC3 images here.
@@ -584,6 +584,45 @@ class PWCNet:
         return (tf.cast(x, dtype='float32') - 128.0) / 128.0
 
 
+class PWCNetOptions:
+    def __init__(self):
+        self.pyramid_opt = FeaturePyramidExtractorOptions()
+        self.estimator_opt = OpticalFlowEstimatorOptions()
+        self.context_opt = ContextEstimatorOptions()
+        self.use_context_net = True
+    
+    @staticmethod
+    def load(filename, is_training=None):
+        opt = pickle.load(open(filename, 'rb'))
+        log.check(isinstance(opt, PWCNetOptions))
+        opt.set_is_training(is_training)
+        return opt
+
+    def dump(self, filename):
+        pickle.dump(self, open(filename, 'wb'))
+
+    def set_is_training(self, is_training=None):
+        self.context_opt.is_training = is_training
+        self.pyramid_opt.is_training = is_training
+        if isinstance(self.estimator_opt, dict):
+            for k in self.estimator_opt.keys():
+                self.estimator_opt[k].is_training = is_training
+        else:
+            self.estimator_opt.is_training = is_training
+
+    def __str__(self):
+        estimator_opt_str = ''
+        if isinstance(self.estimator_opt, dict):
+            for k in sorted(self.estimator_opt.keys()):
+                estimator_opt_str += '{}: {}\n\n'.format(k, self.estimator_opt[k])
+        else:
+            estimator_opt_str = '{}'.format(self.estimator_opt)
+        return ("use_context_net: {}\n".format(self.use_context_net) +
+                "context_opt: {}\n\n".format(self.context_opt.__str__()) + 
+                "pyramid_opt: {}\n\n".format(self.pyramid_opt.__str__()) +
+                estimator_opt_str)
+
+
 class PWCNetTrainer:
     """
     Class that creates a PWC network and attaches training losses.
@@ -599,11 +638,6 @@ class PWCNetTrainer:
     """
     MAXIMUM_FLOW_VALUE = 50.0
 
-    class Options:
-        LOSS_WEIGHTS = [0.32, 0.08, 0.02, 0.01, 0.005]
-        USE_ANGULAR_LOSS = True
-        USE_HUBER_LOSS = None
-
     def __init__(self,
                  x1,
                  x2,
@@ -614,9 +648,9 @@ class PWCNetTrainer:
         PWCNetTrainer._verify_inputs(x1, x2, groundtruth, weights)
 
         self.train_options = train_options if train_options is not None \
-            else PWCNetTrainer.Options()
+            else PWCNetTrainerOptions()
         self.pwc_options = pwc_options if pwc_options is not None \
-            else PWCNet.Options()
+            else PWCNetOptions()
 
         # Instantiate network.
         self.pwcnet = PWCNet(x1, x2, self.pwc_options)
@@ -676,7 +710,11 @@ class PWCNetTrainer:
         else:
             self.angular_loss = [tf.Variable(0.0, trainable=False)]
 
-        self.total_loss = sum(self.angular_loss) + sum(self.endpoint_loss)
+        self.regularization_loss = tf.losses.get_regularization_loss()
+        tf.summary.scalar('regularization_loss', self.regularization_loss)
+
+        self.total_loss = sum(self.angular_loss) + sum(
+            self.endpoint_loss) + self.regularization_loss
         tf.summary.scalar('total_loss', self.total_loss)
 
     def get_loss(self):
@@ -762,7 +800,7 @@ class PWCNetTrainer:
         log.check_eq(len(groundtruths), len(loss_weights))
         log.check_eq(len(net.estimator_net), len(loss_weights) - 1, \
             "You do not have an appropriate number of loss weights.")
-        RELATIVE_WEIGHT = 1  #0.01
+        RELATIVE_WEIGHT = 5.0
 
         with tf.name_scope('angular_loss'):
             for i, w in enumerate(loss_weights):
@@ -790,6 +828,13 @@ class PWCNetTrainer:
                 tf.summary.scalar(loss_name, loss)
                 losses.append(loss)
         return losses
+
+
+class PWCNetTrainerOptions:
+    LOSS_WEIGHTS = [0.32, 0.08, 0.02, 0.01, 0.005]
+    USE_ANGULAR_LOSS = True
+    USE_HUBER_LOSS = None
+
 
 
 def _maybe_add_batch_norm_or_activation_fn(entree,
