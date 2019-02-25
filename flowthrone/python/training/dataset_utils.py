@@ -8,6 +8,7 @@ import tensorflow as tf
 import glog as log
 import re
 
+
 def valid_datasets():
     return [
         x.__name__ for x in [SintelDataset, SDHomDataset, FlyingChairsDataset]
@@ -42,7 +43,9 @@ class SintelDataset:
         # for validation, since the groundtruth flow is not provided.
         flow_path = os.path.join(dataset_path, 'training', 'flow')
         seqs = sorted([
-            s for s in os.listdir(flow_path) if os.path.isdir(os.path.join(flow_path, s))])
+            s for s in os.listdir(flow_path)
+            if os.path.isdir(os.path.join(flow_path, s))
+        ])
         log.check_gt(
             len(seqs), 0, 'Did not find any sequences -- is the path correct?')
         train_seqs, val_seqs = self._split_sequences(seqs, num_splits)
@@ -70,7 +73,8 @@ class SintelDataset:
     def _process_sequence(self, dataset_path, seq):
         flow_path = os.path.join(dataset_path, 'training', 'flow', seq)
         img_path = os.path.join(dataset_path, 'training', 'final', seq)
-        flo_files = sorted([f for f in os.listdir(flow_path) if f.endswith('flo')])
+        flo_files = sorted(
+            [f for f in os.listdir(flow_path) if f.endswith('flo')])
         output = []
         for f in flo_files:
             idx = int(re.findall('frame_([0-9]+).flo', f)[0])
@@ -261,10 +265,13 @@ def write_triplet(triplet, output_path, idx):
 def resize_triplet(triplet, scale):
     """ Isotropically resizes and returns the provided (flow, image1, image2)
     tuple. """
-    sz = (int(triplet[0].shape[0] * scale), int(triplet[0].shape[1] * scale))
+    width = int(triplet[0].shape[1] * scale)
+    height = int(triplet[0].shape[0] * scale)
+    sz = (height, width)
     return [
-        utils.resample_flow(triplet[0], sz), cv2.resize(triplet[1], sz),
-        cv2.resize(triplet[2], sz)
+        utils.resample_flow(triplet[0], sz),
+        cv2.resize(triplet[1], (width, height)),
+        cv2.resize(triplet[2], (width, height)),
     ]
 
 
@@ -289,10 +296,8 @@ def generate_example_triplet_scale(triplet,
     # Reset the lower bound if necessary. Otherwise, we run the risk of
     # choosing a too-small scale, and not being able to pick a
     # (target_size, target_size) sized crop later.
-    if min_scale > scale_range[0]:
-        scale_range[0] = min_scale
-    if scale_range[0] > scale_range[1]:
-        scale_range[1] = scale_range[0]
+    scale_range[0] = max(scale_range[0], min_scale)
+    scale_range[1] = max(scale_range[1], scale_range[0])
     scale = np.random.uniform(low=scale_range[0], high=scale_range[1])
     return resize_triplet(triplet, scale)
 
@@ -303,7 +308,6 @@ def generate_example_triplet_shift_and_crop(triplet, target_size):
     rows = triplet[0].shape[0]
     cols = triplet[0].shape[1]
     assert target_size[0] <= rows and target_size[1] <= cols
-
     # Choose a random offset and crop.
     y_offset = 0
     x_offset = 0
@@ -312,6 +316,8 @@ def generate_example_triplet_shift_and_crop(triplet, target_size):
     if cols > target_size[1]:
         x_offset = np.random.randint(0, cols - target_size[1])
 
+    log.check_le(x_offset + target_size[1], cols)
+    log.check_le(y_offset + target_size[0], rows)
     flow = triplet[0][y_offset:y_offset + target_size[0], x_offset:x_offset +
                       target_size[1], :]
     img1 = triplet[1][y_offset:y_offset + target_size[0], x_offset:x_offset +
@@ -397,7 +403,6 @@ def decode_tf_example(serialized_example, imsize):
             features['y'], out_type=tf.float32, name='y'),
         shape=[imsize, imsize, 2])
     return x1, x2, y
-
 
 
 def write_tf_records_dataset(input_files_list, output_filename):

@@ -47,7 +47,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
 import tf_utils
-from training_manager import variable_summary
+from training.training_manager import variable_summary
 import warnings
 from tensorflow.contrib.slim import conv2d
 from tensorflow.contrib.slim import l2_regularizer
@@ -55,7 +55,8 @@ from tensorflow.contrib.layers import batch_norm
 import glog as log
 import pickle
 
-GLOBAL_L2_REGULARIZATION = 1e-9
+GLOBAL_L2_REGULARIZATION = 1e-6
+OCC_CLIP_VALUE = 10
 
 
 class OpticalFlowEstimator:
@@ -79,32 +80,71 @@ class OpticalFlowEstimator:
     >>>                                 # estimate.
     """
 
-    def __init__(self, x1, x2, uv, opt=None):
+    def __init__(self, x1, x2, uv, occ=None, opt=None):
         OpticalFlowEstimator._verify_shapes(x1, x2, uv)
+        # TODO: verify uv.shape == x1.shape
 
         self.options = opt if opt is not None else \
             OpticalFlowEstimatorOptions()
 
         name = 'OpticalFlowEstimator_{}x{}'.format(x1.shape[1], x1.shape[2])
-        with tf.name_scope(None, name, [x1, x2, uv]):
+        with tf.name_scope(None, name, [x1, x2, uv, occ]):
+            occ_upsampled = tf.image.resize_images(occ, x2.shape[1:3])
+
             uv_upsampled = tf_utils.resample_flow(uv, x2.shape)
             self.x2_warped = tf_utils.warp_with_flow(x2, uv_upsampled)
+            # remove NaNs if any. We most likely do not acquire NaNs here, so
+            # this is only done for safety.
+            self.x2_warped = tf.where(
+                tf.is_nan(self.x2_warped),
+                x=tf.zeros_like(self.x2_warped),
+                y=self.x2_warped)
+
+            # This is added to avoid Inf/-Inf's, although I haven't seen any
+            # evidence regarding those. It is a little ugly, since the scale
+            # of the image [-1, 1] also defined elsewhere.
+            self.x2_warped = tf.clip_by_value(
+                self.x2_warped, clip_value_min=-1.0, clip_value_max=1.0)
 
             if self.options.USE_COST_VOLUME:
                 self.cost_volume = tf_utils.correlation_layer(
                     x1, self.x2_warped, self.options.MAX_SHIFT)
-                # TODO(vasiliy): it is very unfortunate that uv_upsampled was
-                # originally incorrectly omitted from this line.
-                # It may be worthwhile to 'normalize it' (something similar is
-                # mentioned in the paper) to avoid values from increasing over
-                # different layers.
+                # Note: |self.x2_warped| does not figure in the paper.
                 network_tail = tf.concat(
-                    [self.cost_volume, x1, uv_upsampled], axis=3)
+                    [
+                        self.cost_volume,
+                        x1,
+                        self.x2_warped,
+                        uv_upsampled,
+                        occ_upsampled,
+                    ],
+                    axis=3)
             else:
                 network_tail = tf.concat(
-                    [x1, self.x2_warped, uv_upsampled], axis=3)
+                    [x1, self.x2_warped, uv_upsampled, occ_upsampled], axis=3)
                 self.cost_volume = None
             self.layers = self._make_network_spine(network_tail)
+
+            self.flow_increment, occ = \
+                tf.split(self.layers[-1], num_or_size_splits=[2, 1], axis=3)
+            self.output_occlusion = tf.clip_by_value(
+                occ_upsampled + occ,
+                clip_value_min=-OCC_CLIP_VALUE,
+                clip_value_max=OCC_CLIP_VALUE)
+            # This acts as a regularization. It should not be possible to
+            # estimate flow whose values are larger than image size.
+            # (Technically the bound is more strict -- shouldn't be possible
+            # to estimate flow larger than |image_size| - |pixel location|.)
+            max_dim = max(x2.get_shape().as_list()[1],
+                          x2.get_shape().as_list()[2])
+            # Note: paper seems to estimate the output flow directly, rather
+            # than the flow increment (which is what the traditional methods
+            # do). Estimating the increment seems easier (for example, values
+            # do not increase proportionally with scale).
+            self.output_flow = tf.clip_by_value(
+                uv_upsampled + self.flow_increment,
+                clip_value_min=-max_dim,
+                clip_value_max=max_dim)
 
     def get_x2_warped(self):
         """
@@ -112,6 +152,10 @@ class OpticalFlowEstimator:
         flow.
         """
         return self.x2_warped
+
+    def get_flow_increment(self):
+        """ Returns tensor corresponding to the estimated flow increment. """
+        return self.flow_increment
 
     def get_cost_volume(self):
         """
@@ -122,7 +166,10 @@ class OpticalFlowEstimator:
 
     def get_flow(self):
         """ Returns tensor corresponding to the estimated optical flow. """
-        return self.layers[-1]
+        return self.output_flow
+
+    def get_occlusion(self):
+        return self.output_occlusion
 
     def get_penultimate_layer(self):
         """ Returns the penultimate feature map. """
@@ -154,10 +201,10 @@ class OpticalFlowEstimator:
                     outputs[-1], num_outputs=outs))
         # Add the final layer without ReLU following it.
         log.check_eq(
-            2,
+            3,
             self.options.NUM_FILTERS[-1],
-            message=('Last filter in the list must have "num_outputs=2", '
-                     'since its output is optical flow field.'))
+            message=('Last filter in the list must have "num_outputs=3", '
+                     'since its output is optical flow field + uncertainty.'))
 
         outputs.append(
             self._conv2d(
@@ -202,11 +249,12 @@ class OpticalFlowEstimator:
         log.check_eq(2 * int(uv.shape[1]), c1.shape[1])
         log.check_eq(2 * int(uv.shape[2]), c1.shape[2])
 
+
 class OpticalFlowEstimatorOptions:
     def __init__(self):
         self.MAX_SHIFT = 1
         self.L2_REGULARIZATION_SCALE = GLOBAL_L2_REGULARIZATION
-        self.NUM_FILTERS = [128, 64, 64, 32, 2]
+        self.NUM_FILTERS = [128, 64, 64, 32, 3]
         # cost-volume / correlation layer hasn't been properly vetted, so
         # 'off' by default.
         self.USE_COST_VOLUME = False
@@ -344,32 +392,44 @@ class ContextEstimator:
     >>> # network.
     """
 
-    def __init__(self, entree, uv, opt=None):
+    def __init__(self, entree, uv, occ, opt=None):
         ContextEstimator._verify_input(entree, uv)
+        # TODO: verify uv is sample size as occ.
 
         self.options = opt if opt is not None \
             else ContextEstimatorOptions()
 
-        inp_concat = tf.concat([entree, uv], axis=3)
+        inp_concat = tf.concat([entree, uv, occ], axis=3)
         with tf.name_scope('context'):
             self.layers = self._make_network_spine(inp_concat)
             # Add the final layer without ReLU following it.
             self.layers.append(
                 conv2d(
                     inputs=self.layers[-1],
-                    num_outputs=2,
+                    num_outputs=3,
                     kernel_size=3,
                     padding='SAME',
                     weights_regularizer=l2_regularizer(
                         self.options.L2_REGULARIZATION_SCALE),
                     activation_fn=None))
+        uv_context, occ_context = \
+            tf.split(self.layers[-1], num_or_size_splits=[2, 1], axis=3)
+        occ_context = tf.clip_by_value(
+            occ_context,
+            clip_value_min=-OCC_CLIP_VALUE,
+            clip_value_max=OCC_CLIP_VALUE)
         # The two estimates (the 'delta' estimate from the network and the
         # original estimate) are combined by a simple addition.
-        self.flow = self.layers[-1] + uv
+        self.flow = uv_context + uv
+        self.occlusion = occ_context + occ
 
     def get_flow(self):
         """ Returns the final flow estimate. """
         return self.flow
+
+    def get_occlusion(self):
+        """ Returns the final occlusion estimate. """
+        return self.occlusion
 
     def _make_network_spine(self, inp):
         log.check_eq(
@@ -421,6 +481,7 @@ class ContextEstimatorOptions:
     def __str__(self):
         return str(self.__class__) + ": " + str(self.__dict__)
 
+
 class PWCNet:
     """
     Class that creates the network described in: arxiv.org/pdf/1709.02371.pdf
@@ -449,22 +510,31 @@ class PWCNet:
         # Maybe initialize a network estimating 'context' (refined flow).
         if self.options.use_context_net:
             self.context_net = ContextEstimator(
-                self.estimator_net[-1].get_penultimate_layer(),
-                self.estimator_net[-1].get_flow(),
+                entree=self.estimator_net[-1].get_penultimate_layer(),
+                uv=self.estimator_net[-1].get_flow(),
+                occ=self.estimator_net[-1].get_occlusion(),
                 opt=self.options.context_opt)
 
             PWCNet._verify_left_is_half_scale_of_right(
                 self.context_net.get_flow().shape, x1.shape)
             self.output_flow = tf_utils.resample_flow(
                 self.context_net.get_flow(), x1.shape)
+            self.output_occlusion = tf.image.resize_images(
+                self.context_net.get_occlusion(), x1.shape[1:3])
         else:
             self.context_net = None
             self.output_flow = tf_utils.resample_flow(
                 self.estimator_net[-1].get_flow(), x1.shape)
+            self.output_occlusion = tf.image.resize_images(
+                self.estimator_net[-1].get_occlusion(), x1.shape[1:3])
 
     def get_output_flow(self):
         """ Returns the final flow estimate. """
         return self.output_flow
+
+    def get_output_occlusion(self):
+        """ Returns the final occlusion estimate. """
+        return self.output_occlusion
 
     def get_raw_flow(self, level):
         """
@@ -473,6 +543,14 @@ class PWCNet:
         """
         log.check(level >= 0 and level < len(self.estimator_net))
         return self.estimator_net[level].get_flow()
+
+    def get_raw_occlusion(self, level):
+        """
+        Returns an estimate of uncertainty without context network applied to
+        it. Larger levels correspond to finer-resolution estimates.
+        """
+        log.check(level >= 0 and level < len(self.estimator_net))
+        return self.estimator_net[level].get_occlusion()
 
     def debug_info(self):
         print "Pyramid1:"
@@ -506,62 +584,39 @@ class PWCNet:
         smallest_level_shape = \
             pyramid1.get_level(pyramid_levels_to_use[0]).shape.as_list()
         initial_flow_shape = [
-            batch_size, smallest_level_shape[1] / 2,
-            smallest_level_shape[2] / 2, 2
+            batch_size,
+            smallest_level_shape[1] / 2,
+            smallest_level_shape[2] / 2,
+            2,
+        ]
+        initial_occ_shape = [
+            batch_size,
+            smallest_level_shape[1] / 2,
+            smallest_level_shape[2] / 2,
+            1,
         ]
         # Initialize zero flow.
         last_flow = tf.zeros(initial_flow_shape, dtype=tf.float32)
-
+        last_occ = tf.zeros(initial_occ_shape, dtype=tf.float32)
         # The very last (0-th) level for the pyramid is not used in the paper,
         # instead the flow is just upsampled by 2x. If it were used, the input
         # feature maps would have to be raw images (i.e. NxNx3).
         estimator_net = []
         for lvl in pyramid_levels_to_use:
-            print lvl, pyramid1.get_level(lvl)
             if isinstance(options, dict):
                 opts = options[lvl]
             else:
                 opts = options
             estimator_net.append(
                 OpticalFlowEstimator(
-                    pyramid1.get_level(lvl),
-                    pyramid2.get_level(lvl), last_flow, opts))
+                    x1=pyramid1.get_level(lvl),
+                    x2=pyramid2.get_level(lvl),
+                    uv=last_flow,
+                    occ=last_occ,
+                    opt=opts))
             last_flow = estimator_net[-1].get_flow()
+            last_occ = estimator_net[-1].get_occlusion()
         return estimator_net
-
-    #@staticmethod
-    #def _initialize_flow_estimators(pyramid1, pyramid2, options):
-    #    batch_size = tf.shape(pyramid1.get_level(0))[0]
-    #    # get the shape of the last level in the pyramid, and downscale it by
-    #    # 2 to get the initial (null) flow shape.
-    #    num_levels = pyramid1.num_levels()
-
-    #    smallest_level_shape = pyramid1.get_level(num_levels -
-    #                                              1).shape.as_list()
-    #    initial_flow_shape = [
-    #        batch_size, smallest_level_shape[1] / 2,
-    #        smallest_level_shape[2] / 2, 2
-    #    ]
-    #    # Initialize zero flow.
-    #    last_flow = tf.zeros(initial_flow_shape, dtype=tf.float32)
-
-    #    # The very last (0-th) level for the pyramid is not used in the paper,
-    #    # instead the flow is just upsampled by 2x. If it were used, the input
-    #    # feature maps would have to be raw images (i.e. NxNx3).
-    #    pyramid_levels_to_use = range(num_levels - 1, 0, -1)
-    #    estimator_net = []
-    #    for lvl in pyramid_levels_to_use:
-    #        print lvl, pyramid1.get_level(lvl)
-    #        if isinstance(options, dict):
-    #            opts = options[lvl]
-    #        else:
-    #            opts = options
-    #        estimator_net.append(
-    #            OpticalFlowEstimator(
-    #                pyramid1.get_level(lvl),
-    #                pyramid2.get_level(lvl), last_flow, opts))
-    #        last_flow = estimator_net[-1].get_flow()
-    #    return estimator_net
 
     @staticmethod
     def _verify_input(x1, x2):
@@ -590,7 +645,7 @@ class PWCNetOptions:
         self.estimator_opt = OpticalFlowEstimatorOptions()
         self.context_opt = ContextEstimatorOptions()
         self.use_context_net = True
-    
+
     @staticmethod
     def load(filename, is_training=None):
         opt = pickle.load(open(filename, 'rb'))
@@ -614,13 +669,14 @@ class PWCNetOptions:
         estimator_opt_str = ''
         if isinstance(self.estimator_opt, dict):
             for k in sorted(self.estimator_opt.keys()):
-                estimator_opt_str += '{}: {}\n\n'.format(k, self.estimator_opt[k])
+                estimator_opt_str += '{}: {}\n\n'.format(k,
+                                                         self.estimator_opt[k])
         else:
             estimator_opt_str = '{}'.format(self.estimator_opt)
         return ("use_context_net: {}\n".format(self.use_context_net) +
-                "context_opt: {}\n\n".format(self.context_opt.__str__()) + 
-                "pyramid_opt: {}\n\n".format(self.pyramid_opt.__str__()) +
-                estimator_opt_str)
+                "context_opt: {}\n\n".format(self.context_opt.__str__()) +
+                "pyramid_opt: {}\n\n".format(
+                    self.pyramid_opt.__str__()) + estimator_opt_str)
 
 
 class PWCNetTrainer:
@@ -674,6 +730,9 @@ class PWCNetTrainer:
     def get_output_flow(self):
         return self.pwcnet.get_output_flow()
 
+    def get_output_occlusion(self):
+        return self.pwcnet.get_output_occlusion()
+
     def get_magic_scale_value(self):
         return self.MAXIMUM_FLOW_VALUE
 
@@ -701,8 +760,11 @@ class PWCNetTrainer:
         self._initialize_scaled_groundtruth(pwcnet, groundtruth)
 
         self.endpoint_loss = PWCNetTrainer._get_endpoint_error_loss(
-            pwcnet, self.train_options.LOSS_WEIGHTS, self.groundtruth, weights,
-            self.train_options.USE_HUBER_LOSS)
+            pwcnet,
+            self.train_options.LOSS_WEIGHTS,
+            self.groundtruth,
+            weights,
+            loss_type='WEIGHTED')
         if self.train_options.USE_ANGULAR_LOSS:
             self.angular_loss = PWCNetTrainer._get_angular_error_loss(
                 pwcnet, self.train_options.LOSS_WEIGHTS, self.groundtruth,
@@ -743,19 +805,33 @@ class PWCNetTrainer:
             for i in range(net.pyramid2.num_levels()):
                 with tf.name_scope('level{}'.format(i)):
                     variable_summary(net.pyramid2.get_level(i))
-        for estimator_net in net.estimator_net:
-            flow = estimator_net.get_flow()
-            with tf.name_scope(
-                    'flow_{}x{}'.format(flow.shape[1], flow.shape[2])):
-                variable_summary(flow)
+        with tf.name_scope('estimators'):
+            for estimator_net in net.estimator_net:
+                flow = estimator_net.get_flow()
+                sz = flow.shape[1]
+                with tf.name_scope('flow_{}x{}'.format(sz, sz)):
+                    variable_summary(flow)
+                with tf.name_scope('increment_{}x{}'.format(sz, sz)):
+                    variable_summary(estimator_net.get_flow_increment())
+
+        with tf.name_scope('context'):
+            for i, layer in enumerate(net.context_net.layers):
+                with tf.name_scope('layer{}'.format(i)):
+                    variable_summary(layer)
 
     @staticmethod
     def _get_endpoint_error_loss(net,
                                  loss_weights,
                                  groundtruths,
                                  weights=None,
-                                 use_huber_loss=False):
-        """ Returns scaled endpoint error losses. """
+                                 loss_type=None):
+        """
+        Returns endpoint error loss. Options are:
+         - L2
+         - Huber
+         - L2 weighted by uncertainty, like eqn 8 in:
+           https://arxiv.org/pdf/1703.04977.pdf
+        """
         losses = []
         log.check_eq(len(groundtruths), len(loss_weights))
         log.check_eq(len(net.estimator_net) + 1, len(loss_weights), \
@@ -765,6 +841,7 @@ class PWCNetTrainer:
             for i, w in enumerate(loss_weights):
                 if i < len(loss_weights) - 1:
                     prediction = net.estimator_net[i].get_flow()
+                    uncertainty = net.estimator_net[i].get_occlusion()
                 else:
                     if net.options.use_context_net is False:
                         log.warn(
@@ -772,6 +849,7 @@ class PWCNetTrainer:
                             'need to penalize flow at the finest resolution.')
                         break
                     prediction = net.get_output_flow()
+                    uncertainty = net.get_output_occlusion()
 
                 dim = prediction.shape.as_list()[1]
                 loss_name = '{}x{}'.format(dim, dim)
@@ -782,13 +860,18 @@ class PWCNetTrainer:
                 log.check_eq(gt_at_scale.shape.as_list()[2],
                              prediction.shape.as_list()[2])
 
-                if use_huber_loss:
+                if loss_type == 'HUBER':
                     loss = tf_utils.endpoint_huber_loss_at_scale(
                         prediction, gt_at_scale, weights) * w
-                else:
+                elif loss_type == 'L2':
                     loss = tf_utils.endpoint_loss_at_scale(
                         prediction, gt_at_scale, weights) * w
-
+                elif loss_type == 'WEIGHTED':
+                    loss = tf_utils.endpoint_log_likelihood_loss_at_scale(
+                        prediction, uncertainty, gt_at_scale) * w
+                else:
+                    log.fatal("Unrecognized loss type -- should specify "
+                              "{'HUBER', 'L2' 'WEIGHTED'}.")
                 tf.summary.scalar(loss_name, loss)
                 losses.append(loss)
         return losses
@@ -834,7 +917,6 @@ class PWCNetTrainerOptions:
     LOSS_WEIGHTS = [0.32, 0.08, 0.02, 0.01, 0.005]
     USE_ANGULAR_LOSS = True
     USE_HUBER_LOSS = None
-
 
 
 def _maybe_add_batch_norm_or_activation_fn(entree,

@@ -148,7 +148,6 @@ def resample_flow(uv, out_shape):
     out_height = out_shape[0]
     scale_y = out_height / float(in_height)
     scale_x = out_width / float(in_width)
-
     uv_out = cv2.resize(uv, (out_width, out_height))
     uv_out[:, :, 0] *= scale_x
     uv_out[:, :, 1] *= scale_y

@@ -27,11 +27,11 @@ def guess_network_size(width, height):
     #     that a smaller network will do better (for example your video
     #     sequence has very large deformations that the model is not able to
     #     capture).
-    extra_smalling_factor = 3
+    extra_smalling_factor = 0
     ratio = width / float(height)
     # This is a hack: we basically need to make sure that input dimensions are
     # evenly divisible by n-th power of two (here n=6).
-    pow_2_6 = pow(2, 6 + extra_smalling_factor)
+    pow_2_6 = pow(2, 7 + extra_smalling_factor)
     net_height = int(math.ceil(height / float(pow_2_6)) * pow_2_6)
     size = [int(math.ceil(ratio * net_height / pow_2_6)) * pow_2_6, net_height]
     size = [
@@ -46,9 +46,10 @@ def main():
     args = parse_args()
     # Load a pair of images or video.
     if args.video is not None:
-        feeder = VideoFeeder(args.video)
+        feeder = VideoFeeder(args.video, scale=args.input_scale)
     else:
-        feeder = ImageFeeder([args.image1, args.image2])
+        feeder = ImageFeeder(
+            [args.image1, args.image2], scale=args.input_scale)
 
     # Peek at the first image (this is not necessary, but useful to figure out
     # the size.
@@ -66,14 +67,18 @@ def main():
     session_config.gpu_options.allow_growth = True
     sess = tf.Session(config=session_config)
 
-    model_handle = model_config.MODELS[args.model]
-    # Downloads the model if necessary.
-    model_handle.load_if_needed()
-    print("Loading a model from {}".format(model_handle.path))
+    if args.model_path is not None:
+        model_filename = args.model_path
+    else:
+        model_handle = model_config.MODELS[args.model]
+        # Downloads the model if necessary.
+        model_handle.load_if_needed()
+        model_filename = model_handle.path
+    print("Loading a model from {}".format(model_filename))
     # Expensive: usually should do only once for the entire video sequence, or
     # for a collection of images.
     flow_solver = OpticalFlowModel(
-        session=sess, size=args.size, model_path=model_handle.path)
+        session=sess, size=args.size, model_path=model_filename)
 
     while not feeder.done():
         image2 = feeder.next()
@@ -87,8 +92,8 @@ def main():
         if args.visualize:
             cv2.imshow("images", np.concatenate([image1, image2], axis=1))
             cv2.imshow("image", uv)
-            key = cv2.waitKey(0)
-            if key == 27: # escape to exit right away.
+            key = cv2.waitKey(args.wait_time)
+            if key == 27:  # escape to exit right away.
                 exit(1)
 
         if args.output_filename is not None:
@@ -100,10 +105,12 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--model',
-        choices=model_config.MODELS.keys(),
-        default=sorted(model_config.MODELS.keys())[::-1][0])
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--model', choices=model_config.MODELS.keys(),
+        default=None)  #sorted(model_config.MODELS.keys())[::-1][0])
+    group.add_argument(
+        '--model_path', default=None, help='Path to the model checkpoint')
     parser.add_argument(
         '--size', action='append', nargs=2, help='network size')
     parser.add_argument(
@@ -112,13 +119,25 @@ def parse_args():
         '--image2', default=None, help='path to the second image')
     parser.add_argument('--video', default=None, help='path to input video')
     parser.add_argument(
+        '--wait_time',
+        type=int,
+        default=0,
+        help='cv::waitKey wait time in milliseconds')
+    parser.add_argument(
         '--visualize',
         default=False,
         action='store_true',
         help='visualize results?')
     parser.add_argument(
+        '--input_scale',
+        default=1.0,
+        type=float,
+        help='Scale factor by which to resize input before feeding it to the network'
+    )
+    parser.add_argument(
         '--output_filename', default=None, help='output filename')
     args = parser.parse_args()
+
     if args.size is not None:
         args.size = tuple(map(int, args.size[0]))
 

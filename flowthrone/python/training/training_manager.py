@@ -8,6 +8,8 @@ import shutil
 import errno
 import signal
 import augmentation
+import glog as log
+
 
 class TrainingManager:
     """
@@ -83,7 +85,7 @@ class TrainingManager:
 
         if config['shuffle']:
             print "Going to shuffle!"
-            shuffle_buffer = 4
+            shuffle_buffer = 1024
             self.dataset_train = self.dataset_train.shuffle(
                 shuffle_buffer, reshuffle_each_iteration=True)
             self.dataset_test = self.dataset_test.shuffle(
@@ -129,6 +131,18 @@ class TrainingManager:
         builder.add_meta_graph_and_variables(
             tf_session, [tf.saved_model.tag_constants.TRAINING])
         builder.save()
+
+    def delete_old_checkpoints(self):
+        MIN_CHECKPOINTS_TO_KEEP = 50
+        p = self._config['model_checkpoint_path']
+        if not os.path.exists(p):
+            return
+        files = sorted([os.path.join(p, f) for f in os.listdir(p)])
+        num_to_delete = max(0, len(files) - MIN_CHECKPOINTS_TO_KEEP)
+        for f in files[0:num_to_delete]:
+            if os.path.isdir(f):
+                shutil.rmtree(f)
+                print "Removed {}".format(f)
 
     def save_checkpoint(self, tf_session, iteration):
         """ Saves a model checkpoint (for restarting training.) """
@@ -195,19 +209,26 @@ class TrainingManager:
         self.learning_rate = self._get_exponential_decay_learning_rate(
             self.global_step)
         if self._config['optimizer'] == 'SGD':
-            return tf.train.MomentumOptimizer(
+            opt = tf.train.MomentumOptimizer(
                 learning_rate=self.learning_rate,
                 momentum=self._config['momentum'],
-                use_nesterov=True).minimize(
-                        loss, self.global_step)
+                use_nesterov=True)
         elif self._config['optimizer'] == 'ADAM':
-            return tf.train.AdamOptimizer(
+            opt = tf.train.AdamOptimizer(
                 learning_rate=self.learning_rate,
                 beta1=self._config['adam_beta1'],
-                beta2=self._config['adam_beta2']).minimize(
-                        loss, self.global_step)
+                beta2=self._config['adam_beta2'])
         else:
-            assert "UNRECOGNIZED OPTIMIZER TYPE"
+            log.fatal("UNRECOGNIZED OPTIMIZER TYPE")
+
+        gradients, variables = zip(*opt.compute_gradients(loss))
+        if 'max_gradient_norm' in self._config:
+            gradients, _ = tf.clip_by_global_norm(
+                gradients, self._config['max_gradient_norm'])
+
+        with tf.name_scope('gradients'):
+            variable_summary(tf.global_norm(gradients))
+        return opt.apply_gradients(zip(gradients, variables))
 
     def _sigint_handler(self, signum, frame):
         """ Sets a member variable if sigint was captured. """
@@ -240,26 +261,44 @@ class TrainingManager:
                 raise Exception('Could not remove {}'.format(p))
 
 
-def get_flow_images(prediction, groundtruth, idx):
+def _visualize_uncertainty_prediction(log_uncertainty):
+    MAX_VAL = 10
+    occl = np.nan_to_num(log_uncertainty, 0.0)
+    occl = np.squeeze(occl)
+    occl = np.clip(occl, -MAX_VAL, MAX_VAL)
+    occl = np.exp(occl)
+    min_val = np.min(occl)
+    max_val = np.max(occl)
+    occl = 255.0*(occl - min_val) / (max_val - min_val + 1e-6)
+    occl = np.reshape(occl, [occl.shape[0], occl.shape[1], 1])
+    # reshape as [rows, cols, 3] (as if this were a bgr image).
+    occl = np.concatenate([occl, occl, occl], axis=2)
+    return occl
+
+
+def get_flow_images(prediction, occlusion, groundtruth, idx):
     """ Given batches of predictions, groundtruth, and a list of indices,
         returns a visualization of prediction/groundtruth flow. """
     flow_images = []
     for i in idx:
         flow_gt = np.squeeze(groundtruth[i])
         flow_pred = np.squeeze(prediction[i])
+        occl_pred = _visualize_uncertainty_prediction(occlusion[i])
+
         if not flow_gt.shape[0] == flow_pred.shape[0] or \
                 not flow_gt.shape[1] == flow_pred.shape[1]:
             flow_gt = resample_flow(flow_gt, flow_pred.shape)
         flow_cat = np.concatenate([flow_gt, flow_pred], axis=1)
-        flow_images.append(compute_flow_color(uv=flow_cat))
+        flow_cat_vis = compute_flow_color(uv=flow_cat)
+        flow_images.append(np.concatenate([occl_pred, flow_cat_vis], axis=1))
     return np.concatenate(flow_images, axis=1)
 
 
-def get_visualization_summary(tf_session, prediction, groundtruth,
+def get_visualization_summary(tf_session, prediction, occlusion, groundtruth,
                               summary_name):
     image_summary_ops = []
     idx = range(len(groundtruth))
-    flow_images = get_flow_images(prediction, groundtruth, idx)
+    flow_images = get_flow_images(prediction, occlusion, groundtruth, idx)
     flow_image = tf.reshape(flow_images, [1] + list(flow_images.shape))
     return tf_session.run(tf.summary.image(summary_name, flow_image))
 

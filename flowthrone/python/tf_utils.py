@@ -1,12 +1,31 @@
 import tensorflow as tf
 import glog as log
 
-def resample_flow(uv, out_shape, name = None):
+
+def resample_flow(uv, out_shape, name=None):
     """ Rescales flow field. """
     label = 'resample_flow_{}x{}'.format(out_shape[1], out_shape[2])
     with tf.name_scope(name, label, [uv]):
         return _resample_flow(uv, out_shape)
-    
+
+
+def resample_uncertainty(occ, out_shape, name=None):
+    """ Rescales uncertainty/occlusion field. """
+    label = 'resample_occ_{}x{}'.format(out_shape[1], out_shape[2])
+    shape = occ.get_shape().as_list()
+    if len(out_shape) == 4:
+        out_shape = [int(out_shape[1]), int(out_shape[2])]
+    elif len(out_shape) == 2:
+        out_shape = [int(out_shape[0]), int(out_shape[1])]
+    else:
+        raise Exception('Could not interpret shape argument.')
+    scale_x = out_shape[0] / float(shape[1])
+    scale_y = out_shape[1] / float(shape[2])
+    assert scale_x == scale_y, \
+            "Currently flow resampling can only be isotropic."
+    return tf.image.resize_images(occ, [out_shape[0], out_shape[1]]) * scale_x
+
+
 def _resample_flow(uv, out_shape):
     """ Rescales flow field. """
     assert uv.shape[3] == 2, "Flow field must have two channels!"
@@ -80,8 +99,10 @@ def angular_flow_error(x, y, w=None):
                    y[:, :, :, 1] + epsilon)
     lo_bound = -1.0 + epsilon
     hi_bound = 1.0 - epsilon
-    ratio = tf.maximum(lo_bound,
-                       tf.minimum(hi_bound, num / (epsilon + den1 * den2)))
+    ratio = tf.clip_by_value(
+        num / (epsilon + den1 * den2),
+        clip_value_min=lo_bound,
+        clip_value_max=hi_bound)
     if w is not None:
         return tf.acos(ratio) * tf.reduce_mean(w, axis=3)
     else:
@@ -108,11 +129,31 @@ def _endpoint_huber_loss_at_scale(prediction, groundtruth, weights=None):
     if not prediction.shape == groundtruth.shape:
         sz = [prediction.shape[1], prediction.shape[2]]
         groundtruth_scaled = resample_flow(groundtruth, prediction.shape)
-        return tf.reduce_mean(tf.losses.huber_loss(
-            prediction, groundtruth_scaled, delta=HUBER_DELTA))
+        return tf.reduce_mean(
+            tf.losses.huber_loss(
+                prediction, groundtruth_scaled, delta=HUBER_DELTA))
     else:
-        return tf.reduce_mean(tf.losses.huber_loss(
-            prediction, groundtruth, delta=HUBER_DELTA))
+        return tf.reduce_mean(
+            tf.losses.huber_loss(
+                prediction, groundtruth, delta=HUBER_DELTA))
+
+
+def endpoint_log_likelihood_loss_at_scale(prediction, uncertainty,
+                                          groundtruth):
+    with tf.name_scope(None, 'endpoint_loss',
+                       [prediction, uncertainty, groundtruth]):
+        return _endpoint_log_likelihood_loss_at_scale(prediction, uncertainty,
+                                                      groundtruth)
+
+
+def _endpoint_log_likelihood_loss_at_scale(prediction, uncertainty,
+                                           groundtruth):
+    assert prediction.shape[1:3] == groundtruth.shape[1:3]
+    assert uncertainty.shape[1:2] == groundtruth.shape[1:2]
+    #return tf.reduce_mean((prediction - groundtruth)**2)
+    # TODO(vasiliy): fixme!!!    
+    return tf.reduce_mean(
+        tf.math.exp(-uncertainty) * (prediction - groundtruth)**2 + 1.0*uncertainty)
 
 
 def endpoint_loss_at_scale(prediction, groundtruth, weights=None):
@@ -200,6 +241,7 @@ def warp_with_flow(images, uv, name=None):
     """ Warps a batch of images (a 4D tensor) by the provided optical flow. """
     with tf.name_scope(name, 'warp_with_flow', [images, uv]):
         return _warp_with_flow(images, uv)
+
 
 def _warp_with_flow(images, uv):
     """ Warps a batch of images (a 4D tensor) by the provided optical flow. """
