@@ -37,6 +37,7 @@ MODELS = {
         url='https://www.dropbox.com/s/s4qscphc0lhbsmf/pwcnet_256x256_v0.zip?dl=0'
     ),
     'pwcnet_128x128_v1': ModelPathHandle(
-        name='pwcnet_128x128_v1', url=None
+        name='pwcnet_128x128_v1',
+        url='https://www.dropbox.com/s/yii3xwrm7q8dc2z/pwcnet_256x256_v1.zip?dl=0',
     ),
 }
