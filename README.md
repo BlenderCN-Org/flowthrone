@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/vasiliykarasev/flowthrone.svg?branch=master)](https://travis-ci.org/vasiliykarasev/flowthrone)
+
 # flowthrone
 
 Dense and deep optical flow.
