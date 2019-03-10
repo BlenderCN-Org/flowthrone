@@ -1,3 +1,5 @@
 language: python
+install:
+  - pip install -r flowthrone/python/requirements.txt
 
 script: pytest
