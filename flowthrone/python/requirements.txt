@@ -1,2 +1,5 @@
 glog
 tensorflow>=1.10.1
+opencv-python
+numpy
+
