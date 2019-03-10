@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tensorflow as tf
 import tf_utils
 from tf_utils import resample_flow, angular_flow_error, endpoint_flow_error, l2_warp_error
-from training_manager import variable_summary
+from training.training_manager import variable_summary
 import warnings
 
 

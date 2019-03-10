@@ -4,6 +4,8 @@ import os
 import unittest
 import utils
 
+VISUALIZE = False
+
 
 class TestReadWriteFlo(unittest.TestCase):
     test_filename = 'test_filename.flo'
@@ -37,7 +39,10 @@ class TestColorMap(unittest.TestCase):
     tolerance = 1e-2
 
     def setUp(self):
-        image_filename = '../testdata/gtflow.jpg'
+        from os.path import abspath, dirname, join
+
+        image_filename = join(
+            dirname(dirname(abspath(__file__))), 'testdata', 'gtflow.jpg')
         assert os.path.exists(image_filename)
         self.gtimage = cv2.imread(image_filename) / 255.0
 
@@ -106,20 +111,25 @@ class TestComputeResidual(unittest.TestCase):
 
 class TestResampleFlow(unittest.TestCase):
     def test_simple(self):
-        """ Create a simple scenario where a rectangle is moving to the right.
-          Given perfect flow, residual should be nonzero only in the occluded
-          region. """
+        """ 
+        Flow resampling is supposed to scale values as well as image dimensions
+        (e.g. downscaling by 2x also downscales flow values). This test 
+        confirms that this is happening.
+        """
         uv = np.ones([10, 20, 2])
         uv[:, :, 0] = -5
         uv[:, :, 1] = +10
 
-        uv_out = utils.resample_flow(uv, [10, 10])
-        uv_expected = np.concatenate(
-            [np.ones([10, 10, 1]) * (-2.5),
-             np.ones([10, 10, 1]) * (+10)],
-            axis=2)
-        # Verify that in the occluded region residual is large.
-        self.assertGreater(np.linalg.norm(uv_expected - uv_out), 0.0)
+        uv_out = utils.resample_flow(uv, [5, 10])
+
+        uv_expected_x = -2.5*np.ones([5, 10])
+        uv_expected_y = +5.0*np.ones([5, 10])
+         
+        self.assertEqual(uv_out.shape, (5, 10, 2))
+        self.assertEqual(np.linalg.norm(uv_expected_x - uv_out[:,:,0]), 0.0,
+            msg='x-flow values are not correctly rescaled!')
+        self.assertEqual(np.linalg.norm(uv_expected_y - uv_out[:,:,1]), 0.0,
+            msg='y-flow values are not correctly rescaled!')
 
 
 class TestLoadPfm(unittest.TestCase):
@@ -127,8 +137,9 @@ class TestLoadPfm(unittest.TestCase):
     def test_simple(self):
         fn = '../testdata/04190.pfm'
         image = utils.read_pfm(fn)
-        cv2.imshow("image", utils.compute_flow_color(image))
-        cv2.waitKey(0)
+        if VISUALIZE:
+            cv2.imshow("image", utils.compute_flow_color(image))
+            cv2.waitKey(0)
 
 
 if __name__ == '__main__':

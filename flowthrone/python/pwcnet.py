@@ -567,8 +567,20 @@ class PWCNet:
             print "Context estimator is not instantiated."
         print "Output flow:", self.output_flow
 
+    # TODO: this is overly complicated.
+    @staticmethod
+    def _ensure_estimator_options_isdict(options, num_levels):
+      if not isinstance(options, dict):
+        opts_dict = {}
+        for i in range(1, num_levels-2):
+          opts_dict[i] = options
+        return opts_dict
+      return options
+
     @staticmethod
     def _initialize_flow_estimators(pyramid1, pyramid2, options):
+        num_levels = pyramid1.num_levels()
+        options = PWCNet._ensure_estimator_options_isdict(options, num_levels)
         log.check(isinstance(options, dict))
 
         batch_size = tf.shape(pyramid1.get_level(0))[0]

@@ -2,8 +2,10 @@ import tensorflow as tf
 import os
 import unittest
 import numpy as np
-from pwcnet import (FeaturePyramidExtractor, OpticalFlowEstimator,
-                    ContextEstimator, PWCNet, PWCNetTrainer)
+from pwcnet import (FeaturePyramidExtractor, FeaturePyramidExtractorOptions, 
+                    OpticalFlowEstimator, OpticalFlowEstimatorOptions,
+                    ContextEstimator, ContextEstimatorOptions, 
+                    PWCNet, PWCNetOptions, PWCNetTrainer)
 
 
 def make_random_input(dim, channels):
@@ -54,7 +56,7 @@ class FeaturePyramidExtractorTest(unittest.TestCase):
         Verifies that network levels dimensions are what they should be
         according to the paper.
         """
-        opts = FeaturePyramidExtractor.Options()
+        opts = FeaturePyramidExtractorOptions()
         opts.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
 
         net = FeaturePyramidExtractor(make_random_input(512, 3), opts)
@@ -73,114 +75,118 @@ class FeaturePyramidExtractorTest(unittest.TestCase):
 
     def test_with_batch_norm(self):
         """ At least verify that syntax doesnt break. """
-        opts = FeaturePyramidExtractor.Options()
+        opts = FeaturePyramidExtractorOptions()
         opts.is_training = tf.Variable(True, dtype=tf.bool)
 
         net = FeaturePyramidExtractor(make_random_input(128, 3), opts)
 
 
 class OpticalFlowEstimatorTest(unittest.TestCase):
-    def setUp(self):
-        tf.reset_default_graph()
-
-    def test_expected_dimensions(self):
-        """ Verify that dimensions of the layers match expectations. """
-        DIM = 256
-        x1 = make_random_input(DIM, channels=3)
-        x2 = make_random_input(DIM, channels=3)
-        uv = make_random_input(DIM / 2, channels=2)
-
-        estimator = OpticalFlowEstimator(x1, x2, uv)
-
-        self.assertEqual([DIM, DIM, 3],
-                         estimator.get_x2_warped().shape.as_list()[1:])
-        # LATER WE WILL RE-ENABLE THIS.
-        #self.assertEqual([DIM, DIM, (estimator.options.MAX_SHIFT * 2 + 1)**2],
-        #                 estimator.get_cost_volume().shape.as_list()[1:])
-        self.assertEqual([DIM, DIM, 2],
-                         estimator.get_flow().shape.as_list()[1:])
-        for layer in estimator.layers:
-            self.assertEqual([DIM, DIM], layer.shape.as_list()[1:3])
-
-    def test_runs_successfully(self):
-        """
-        Verifies that we can evaluate the network successfully, and that
-        flow values do not get rectified out.
-        """
-        DIM = 64
-        x1 = make_random_input(DIM, channels=3)
-        x2 = make_random_input(DIM, channels=3)
-        uv = make_random_input(DIM / 2, channels=2)
-
-        estimator = OpticalFlowEstimator(x1, x2, uv)
-        flow = estimator.get_flow()
-        penultimate = estimator.get_penultimate_layer()
-        session = tf.Session()
-        with session.as_default():
-            session.run(tf.global_variables_initializer())
-            flow_vals = session.run([flow])
-
-            nnz_frac = np.count_nonzero(flow_vals) / float(np.size(flow_vals))
-            print 'Fraction of nonzero elements {}'.format(nnz_frac)
-            # Zero values do appear here sometimes.
-            self.assertGreater(nnz_frac, 0.01, \
-                msg='Expected nnz to be high, due to lack of ReLU: {}'.format(nnz_frac))
-        session.close()
-
-    def test_with_batch_norm(self):
-        """ At least verify that syntax doesnt break. """
-        opts = OpticalFlowEstimator.Options()
-        opts.is_training = tf.Variable(True, tf.bool)
-
-        DIM = 64
-        estimator = OpticalFlowEstimator(
-            make_random_input(
-                DIM, channels=3),
-            make_random_input(
-                DIM, channels=3),
-            make_random_input(
-                DIM / 2, channels=2))
-
-
+     def setUp(self):
+         tf.reset_default_graph()
+ 
+     def test_expected_dimensions(self):
+         """ Verify that dimensions of the layers match expectations. """
+         DIM = 32
+         x1 = make_random_input(DIM, channels=3)
+         x2 = make_random_input(DIM, channels=3)
+         uv = make_random_input(DIM / 2, channels=2)
+         occ = make_random_input(DIM / 2, channels=1)
+ 
+         estimator = OpticalFlowEstimator(x1, x2, uv, occ)
+ 
+         self.assertEqual([DIM, DIM, 3],
+                          estimator.get_x2_warped().shape.as_list()[1:])
+         self.assertEqual([DIM, DIM, 2],
+                          estimator.get_flow().shape.as_list()[1:])
+         for layer in estimator.layers:
+             self.assertEqual([DIM, DIM], layer.shape.as_list()[1:3])
+ 
+     def test_runs_successfully(self):
+         """
+         Verifies that we can evaluate the network successfully, and that
+         flow values do not get rectified out.
+         """
+         DIM = 32
+         x1 = make_random_input(DIM, channels=3)
+         x2 = make_random_input(DIM, channels=3)
+         uv = make_random_input(DIM / 2, channels=2)
+         occ = make_random_input(DIM / 2, channels=1)
+ 
+         estimator = OpticalFlowEstimator(x1, x2, uv, occ)
+         flow = estimator.get_flow()
+         penultimate = estimator.get_penultimate_layer()
+         session = tf.Session()
+         with session.as_default():
+             session.run(tf.global_variables_initializer())
+             flow_vals = session.run([flow])
+ 
+             nnz_frac = np.count_nonzero(flow_vals) / float(np.size(flow_vals))
+             print 'Fraction of nonzero elements {}'.format(nnz_frac)
+             # Zero values do appear here sometimes.
+             self.assertGreater(nnz_frac, 0.01, \
+                 msg='Expected nnz to be high, due to lack of ReLU: {}'.format(nnz_frac))
+         session.close()
+ 
+     def test_with_batch_norm(self):
+         """ At least verify that syntax doesnt break. """
+         opts = OpticalFlowEstimatorOptions()
+         opts.is_training = tf.Variable(True, tf.bool)
+ 
+         DIM = 64
+         estimator = OpticalFlowEstimator(
+             make_random_input(
+                 DIM, channels=3),
+             make_random_input(
+                 DIM, channels=3),
+             make_random_input(
+                 DIM / 2, channels=2),
+             make_random_input(
+                 DIM / 2, channels=1))
+ 
+ 
 class ContextEstimatorTest(unittest.TestCase):
     def setUp(self):
         tf.reset_default_graph()
 
     def test_expected_dimensions(self):
         """ Verifies that network dimensions are what they should be. """
-        x = make_random_input(dim=128, channels=32)
-        uv = make_random_input(dim=128, channels=2)
-        net = ContextEstimator(x, uv)
-        self.assertEqual([128, 128, 2], net.get_flow().shape.as_list()[1:4])
-        self.assertEqual([128, 128, 2], net.layers[-1].shape.as_list()[1:4])
+        DIM = 64
+        x = make_random_input(dim=DIM, channels=32)
+        uv = make_random_input(dim=DIM, channels=2)
+        occ = make_random_input(dim=DIM, channels=1)
+        net = ContextEstimator(x, uv, occ)
+        self.assertEqual([DIM, DIM, 2], net.get_flow().shape.as_list()[1:4])
+        self.assertEqual([DIM, DIM, 1], net.get_occlusion().shape.as_list()[1:4])
+        self.assertEqual([DIM, DIM, 3], net.layers[-1].shape.as_list()[1:4])
 
-
+ 
 class PWCNetTest(unittest.TestCase):
     def setUp(self):
         tf.reset_default_graph()
 
     def test_expected_dimensions(self):
-        DIM = 128
+        DIM = 64
         x1 = make_random_uint8_input(dim=DIM, channels=3)
         x2 = make_random_uint8_input(dim=DIM, channels=3)
         
-        opt = PWCNet.Options()
-        opt.pyramid_opt.NUM_FILTERS = [16, 32, 64, 96, 128, 192]
+        opt = PWCNetOptions()
+        opt.pyramid_opt.NUM_FILTERS = [16, 32, 64, 96, 128]
         opt.estimator_opt = {}
-        for lvl in [6, 5, 4, 3, 2, 1]:
-          opt.estimator_opt[lvl] = OpticalFlowEstimator.Options()
+        for lvl in [5, 4, 3, 2, 1]:
+          opt.estimator_opt[lvl] = OpticalFlowEstimatorOptions()
 
         net = PWCNet(x1, x2, options=opt)
         flow = net.get_output_flow()
 
         self.assertEqual([DIM, DIM, 2], flow.shape.as_list()[1:4])
-        self.assertEqual(6, len(net.estimator_net))
-        for lvl in range(6):
+        self.assertEqual(5, len(net.estimator_net))
+        for lvl in range(5):
             flow = net.get_raw_flow(lvl)
             dim = pow(2, 1 + lvl)
             self.assertEqual([dim, dim, 2], flow.shape.as_list()[1:4])
-
-
+ 
+ 
 class PWCNetTrainerTest(unittest.TestCase):
     def setUp(self):
         tf.reset_default_graph()
@@ -190,8 +196,8 @@ class PWCNetTrainerTest(unittest.TestCase):
         Sets up the object used for training and runs one gradient descent
         step, while doing basic sanity checks.
         """
-        DIM = 256
-        BS = 16
+        DIM = 32
+        BS = 4
         x1 = tf.placeholder(tf.uint8, [None, DIM, DIM, 3])
         x2 = tf.placeholder(tf.uint8, [None, DIM, DIM, 3])
         y = tf.placeholder(tf.float32, [None, DIM, DIM, 2])
@@ -220,6 +226,7 @@ class PWCNetTrainerTest(unittest.TestCase):
             frac_nnz = np.count_nonzero(output_flow_val) / float(output_flow_val.size)
             self.assertLess(0.8, frac_nnz, \
                     'Should not have many zeros in output.')
+
 
 if __name__ == '__main__':
     # There is absolutely no reason to use GPU for these tests, and this

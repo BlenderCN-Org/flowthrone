@@ -1,5 +1,6 @@
 import os
 import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import compute_flow_color, resample_flow
 import dataset_utils
 import tensorflow as tf
