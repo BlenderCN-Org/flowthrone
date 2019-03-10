@@ -1,5 +1,10 @@
 language: python
 install:
   - pip install -r flowthrone/python/requirements.txt
-
-script: pytest
+  - pip install pytest
+  - pip install pytest-cov
+  - pip install coveralls
+script:
+  - pytest --cov=flowthrone/python/
+after_success:
+  - coveralls
