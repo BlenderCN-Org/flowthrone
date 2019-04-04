@@ -7,23 +7,42 @@ import numpy as np
 import tensorflow as tf
 import glog as log
 import re
-
-
-def valid_datasets():
-    return [
-        x.__name__ for x in [SintelDataset, SDHomDataset, FlyingChairsDataset]
-    ]
-
+import sys
 
 def create_dataset(kind, path):
+    """ 
+    'Factory'-like function for creating a dataset of the specified kind. 
+    USAGE:
+    >>> datasets = [
+            create_dataset('FlyingChairsDataset', '/data/flying_chairs/'),
+            create_dataset('FlyingChairs2Dataset', '/data/flying_chairs2/'),
+            create_dataset('SintelDataset', '/data/sintel/'),
+        ]
+    >>> for d in datasets:
+            print d.train_files(), d.val_files(), d.all_files()
+    """
     log.check(kind in valid_datasets())
     if kind == FlyingChairsDataset.__name__:
         return FlyingChairsDataset(path)
+    if kind == FlyingChairs2Dataset.__name__:
+        return FlyingChairs2Dataset(path)
     if kind == SDHomDataset.__name__:
         return SDHomDataset(path)
     if kind == SintelDataset.__name__:
         return SintelDataset(path)
-    log.fatal('You did not specify a valid dataset type {}'.format(kind))
+    return sys.modules[kind](path)
+
+def valid_datasets():
+    """ Returns names of existing datasets. """
+    return [
+        x.__name__
+        for x in [
+            SintelDataset,
+            SDHomDataset,
+            FlyingChairsDataset,
+            FlyingChairs2Dataset,
+        ]
+    ]
 
 
 class SintelDataset:
@@ -109,6 +128,51 @@ class FlyingChairsDataset:
             matchers=flying_chairs_matchers())
 
 
+class FlyingChairs2Dataset:
+    """ Helper class for loading FlyingChairs2 dataset.
+        (https://lmb.informatik.uni-freiburg.de/resources/datasets/FlyingChairs.en.html#flyingchairs2)
+
+        USAGE:
+         >>> dataset = FlyingChairs2Dataset('/path/to/my/flow/dataset/')
+         >>> train_files = dataset.train_files()
+         >>> val_files = dataset.val_files()
+         >>> all_files = dataset.all_files()
+
+    """
+
+    def train_files(self):
+        return self._train_file_list
+
+    def val_files(self):
+        return self._val_file_list
+
+    def all_files(self):
+        return self._all_file_list
+
+    def __init__(self, dataset_path):
+        self._train_file_list = self._get_files(dataset_path, 'train')
+        self._val_file_list = self._get_files(dataset_path, 'val')
+        self._all_file_list = self._train_file_list + self._val_file_list
+
+    def _get_files(self, dataset_path, kind):
+        dataset_path = os.path.join(dataset_path, kind)
+        FLOW_MATCHER = '-flow_01.flo'
+        IMG1_FN = '-img_0.png'
+        IMG2_FN = '-img_1.png'
+
+        flo_files = sorted([f for f in os.listdir(dataset_path) \
+                            if f.endswith(FLOW_MATCHER)])
+        files = []
+        for i, f in enumerate(flo_files):
+            flo_fn = os.path.join(dataset_path, f)
+            i1_fn = os.path.join(dataset_path,
+                                 f.replace(FLOW_MATCHER, IMG1_FN))
+            i2_fn = os.path.join(dataset_path,
+                                 f.replace(FLOW_MATCHER, IMG2_FN))
+            files.append([flo_fn, i1_fn, i2_fn])
+        return files
+
+
 class SDHomDataset:
     """ Helper class for loading SDHom dataset
         (https://lmb.informatik.uni-freiburg.de/resources/datasets/FlyingChairs.en.html#chairssdhom)
@@ -120,13 +184,6 @@ class SDHomDataset:
          >>> all_files = dataset.all_files()
 
     """
-    _train_file_list = []
-    _val_file_list = []
-    _all_file_list = []
-
-    _FLOW_MATCHER = None
-    _IMG1_FN = None
-    _IMG2_FN = None
 
     def train_files(self):
         return self._train_file_list
@@ -144,20 +201,20 @@ class SDHomDataset:
         self._all_file_list = self._train_file_list + self._val_file_list
 
     def _get_files(self, dataset_path, kind):
-        self._FLOW_MATCHER = '.pfm'
-        self._IMG1_FN = '.png'
-        self._IMG2_FN = '.png'
+        FLOW_MATCHER = '.pfm'
+        IMG1_FN = '.png'
+        IMG2_FN = '.png'
 
         flo_files = sorted([f for f in \
                 os.listdir(os.path.join(dataset_path, kind, 'flow')) \
-                            if f.endswith(self._FLOW_MATCHER)])
+                            if f.endswith(FLOW_MATCHER)])
         files = []
         for i, f in enumerate(flo_files):
             flo_fn = os.path.join(dataset_path, kind, 'flow', f)
             i1_fn = os.path.join(dataset_path, kind, 't0',
-                                 f.replace(self._FLOW_MATCHER, self._IMG1_FN))
+                                 f.replace(FLOW_MATCHER, IMG1_FN))
             i2_fn = os.path.join(dataset_path, kind, 't1',
-                                 f.replace(self._FLOW_MATCHER, self._IMG2_FN))
+                                 f.replace(FLOW_MATCHER, IMG2_FN))
             files.append([flo_fn, i1_fn, i2_fn])
         return files
 
@@ -184,13 +241,6 @@ class Dataset:
          >>> train_files = dataset.train_files()
          >>> val_files = dataset.val_files()
     """
-    _train_file_list = []
-    _val_file_list = []
-    _all_file_list = []
-
-    _FLOW_MATCHER = None
-    _IMG1_FN = None
-    _IMG2_FN = None
 
     def train_files(self):
         return self._train_file_list
@@ -203,6 +253,9 @@ class Dataset:
 
     def __init__(self, dataset_path, num_splits=10, \
                        matchers=['flow1.flo', 'img1.jpg', 'img2.jpg']):
+        self._train_file_list = []
+        self._val_file_list = []
+        self._all_file_list = []
         self._FLOW_MATCHER = matchers[0]
         self._IMG1_FN = matchers[1]
         self._IMG2_FN = matchers[2]
