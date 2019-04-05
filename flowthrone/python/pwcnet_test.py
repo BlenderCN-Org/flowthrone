@@ -91,9 +91,8 @@ class OpticalFlowEstimatorTest(unittest.TestCase):
          x1 = make_random_input(DIM, channels=3)
          x2 = make_random_input(DIM, channels=3)
          uv = make_random_input(DIM / 2, channels=2)
-         occ = make_random_input(DIM / 2, channels=1)
  
-         estimator = OpticalFlowEstimator(x1, x2, uv, occ)
+         estimator = OpticalFlowEstimator(x1, x2, uv)
  
          self.assertEqual([DIM, DIM, 3],
                           estimator.get_x2_warped().shape.as_list()[1:])
@@ -111,9 +110,8 @@ class OpticalFlowEstimatorTest(unittest.TestCase):
          x1 = make_random_input(DIM, channels=3)
          x2 = make_random_input(DIM, channels=3)
          uv = make_random_input(DIM / 2, channels=2)
-         occ = make_random_input(DIM / 2, channels=1)
  
-         estimator = OpticalFlowEstimator(x1, x2, uv, occ)
+         estimator = OpticalFlowEstimator(x1, x2, uv)
          flow = estimator.get_flow()
          penultimate = estimator.get_penultimate_layer()
          session = tf.Session()
@@ -140,9 +138,7 @@ class OpticalFlowEstimatorTest(unittest.TestCase):
              make_random_input(
                  DIM, channels=3),
              make_random_input(
-                 DIM / 2, channels=2),
-             make_random_input(
-                 DIM / 2, channels=1))
+                 DIM / 2, channels=2))
  
  
 class ContextEstimatorTest(unittest.TestCase):
@@ -154,11 +150,9 @@ class ContextEstimatorTest(unittest.TestCase):
         DIM = 64
         x = make_random_input(dim=DIM, channels=32)
         uv = make_random_input(dim=DIM, channels=2)
-        occ = make_random_input(dim=DIM, channels=1)
-        net = ContextEstimator(x, uv, occ)
+        net = ContextEstimator(x, uv)
         self.assertEqual([DIM, DIM, 2], net.get_flow().shape.as_list()[1:4])
-        self.assertEqual([DIM, DIM, 1], net.get_occlusion().shape.as_list()[1:4])
-        self.assertEqual([DIM, DIM, 3], net.layers[-1].shape.as_list()[1:4])
+        self.assertEqual([DIM, DIM, 2], net.layers[-1].shape.as_list()[1:4])
 
  
 class PWCNetTest(unittest.TestCase):
