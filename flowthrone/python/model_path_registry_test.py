@@ -16,7 +16,7 @@ class ModelPathRegistryTest(unittest.TestCase):
         # Monkey-patch a method in ModelPathHandle that otherwise would trigger
         # a download.
         for name in registry._models.keys():
-            registry._models[name].load = None
+            registry._models[name].load_if_needed = lambda:None
 
         model_path_handle = registry.get_latest()
 
