@@ -1,8 +1,10 @@
 import cv2
 from augmentation import *
 import os
+import sys
 import unittest
 import numpy as np
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import compute_residual
 
 

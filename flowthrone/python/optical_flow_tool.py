@@ -13,7 +13,7 @@ import time
 import utils
 from optical_flow_model import OpticalFlowModel
 from utils import compute_flow_color
-import model_config
+from model_path_registry import ModelPathRegistry
 from input_feeder import VideoFeeder, ImageFeeder
 
 
@@ -67,18 +67,11 @@ def main():
     session_config.gpu_options.allow_growth = True
     sess = tf.Session(config=session_config)
 
-    if args.model_path is not None:
-        model_filename = args.model_path
-    else:
-        model_handle = model_config.MODELS[args.model]
-        # Downloads the model if necessary.
-        model_handle.load_if_needed()
-        model_filename = model_handle.path
-    print("Loading a model from {}".format(model_filename))
     # Expensive: usually should do only once for the entire video sequence, or
     # for a collection of images.
-    flow_solver = OpticalFlowModel(
-        session=sess, size=args.size, model_path=model_filename)
+    print("Loading a model from {}".format(args.model))
+    flow_solver = OpticalFlowModel.create(
+        session=sess, name=args.model, size=args.size)
 
     while not feeder.done():
         image2 = feeder.next()
@@ -107,10 +100,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        '--model', choices=model_config.MODELS.keys(),
-        default=None)  #sorted(model_config.MODELS.keys())[::-1][0])
-    group.add_argument(
-        '--model_path', default=None, help='Path to the model checkpoint')
+        '--model',
+        choices=ModelPathRegistry().list(),
+        default=None,
+        help='Model name. Latest will be loaded if nothing is specified.')
     parser.add_argument(
         '--size', action='append', nargs=2, help='network size')
     parser.add_argument(
@@ -132,7 +125,8 @@ def parse_args():
         '--input_scale',
         default=1.0,
         type=float,
-        help='Scale factor by which to resize input before feeding it to the network'
+        help=
+        'Scale factor by which to resize input before feeding it to the network'
     )
     parser.add_argument(
         '--output_filename', default=None, help='output filename')
