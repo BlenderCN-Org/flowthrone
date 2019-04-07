@@ -1,13 +1,48 @@
-language: python
-install:
-  - pip install -r flowthrone/python/requirements.txt
-  - pip install pytest
-  - pip install pytest-cov
-  - pip install coveralls
-script:
-  - pytest --cov=flowthrone/python/
-after_success:
-  - coveralls
+matrix:
+  include:
+    - language: python
+      install:
+        - pip install -r flowthrone/python/requirements.txt
+        - pip install pytest
+        - pip install pytest-cov
+        - pip install coveralls
+      script:
+        - pytest flowthrone/python --cov=flowthrone/python/
+      after_success:
+        - coveralls
+
+    - language: cpp
+      os: linux
+      dist: xenial
+      sudo: true
+      compiler: gcc
+      # this is needed to run protoc.
+      install:
+        # This is the same version that's specified in cmake/Protobuf_VERSION.cmake
+        - wget https://mirror.bazel.build/github.com/google/protobuf/archive/396336eb961b75f03b25824fe86cf6490fb75e3a.tar.gz
+        - tar -xzvf 396336eb961b75f03b25824fe86cf6490fb75e3a.tar.gz
+        - cd protobuf-396336eb961b75f03b25824fe86cf6490fb75e3a
+        - ./autogen.sh
+        - ./configure --prefix=/usr/local && make && sudo make install && sudo ldconfig
+        - cd ..
+      addons:
+        apt:
+          packages:
+            - libboost-filesystem-dev
+            - libboost-system-dev
+            - libgoogle-glog-dev
+            - libgtest-dev
+            - libgflags-dev
+            - libopencv-dev
+            - libeigen3-dev
+      script:
+        - mkdir -p build
+        - cd build
+        - cmake ..
+        # We cannot just 'make test' because we cannot easily install/package
+        # tensorflow, which is needed for many tests.
+        # Thus, we only really build a small subset of the entire package :(
+        - make evaluation_test && ./evaluation_test 
 
 branches:
   only:

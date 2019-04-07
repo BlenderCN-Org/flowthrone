@@ -13,13 +13,13 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 # Eigen3 master uses std::binder2nd which is deprecated.
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
 
 # Cmake dependencies
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(cmake/gtest.cmake)
 include(cmake/FindGlog.cmake)
 include(cmake/FindGFlags.cmake)
 include(cmake/FindEigen.cmake)
@@ -27,7 +27,6 @@ include(cmake/FindTensorFlow.cmake)
 
 find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(OpenCV REQUIRED COMPONENTS opencv_core opencv_highgui opencv_imgproc opencv_video)
-find_package(GTest REQUIRED)
 find_package(GFlags REQUIRED)
 find_package(Glog REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -140,7 +139,7 @@ execute_process(COMMAND sed -i "s|export_dir: \".*\"|export_dir: \"${LOCAL_CURRE
 # Copy the trained network. Yes, wget from Dropbox, since S3 costs much m0neys!
 # This is only done once -- when "cmake .." runs for the first time, since
 # these models are nontrivially large.
-if(NOT TF_MODEL_DOWNLOADED)
+if(FALSE) #NOT TF_MODEL_DOWNLOADED)
   message(STATUS "Trying to download a tensorflow model: ${CURRENT_TF_MODEL}")
   #execute_process(COMMAND wget https://www.dropbox.com/s/ivhyrzsi9bfv8bh/model_v3_128x128.tar.gz)
   #execute_process(COMMAND wget https://www.dropbox.com/s/lmwmc0trqekw32n/model_v5_128x128.tar.gz)
@@ -196,14 +195,14 @@ add_executable(io_test flowthrone/cpp/io_test.cpp)
 target_link_libraries(io_test
   test_utils
   flowthrone
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${OpenCV_LIBS}
 )
 
 add_executable(visualization_test flowthrone/cpp/visualization_test.cpp)
 target_link_libraries(visualization_test
   flowthrone
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -212,7 +211,7 @@ add_executable(evaluation_test flowthrone/cpp/evaluation_test.cpp)
 target_link_libraries(evaluation_test
   evaluation
   test_utils
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -220,7 +219,7 @@ target_link_libraries(evaluation_test
 add_executable(utils_test flowthrone/cpp/utils_test.cpp)
 target_link_libraries(utils_test
   flowthrone
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${GFLAGS_LIBRARIES}
   ${OpenCV_LIBS}
 )
@@ -229,7 +228,7 @@ add_executable(tf_utils_test flowthrone/cpp/tf_utils_test.cpp)
 target_link_libraries(tf_utils_test
   flowthrone
   test_utils
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${GFLAGS_LIBRARIES}
 )
 
@@ -237,7 +236,7 @@ add_executable(flow_smoothing_test flowthrone/cpp/flow_smoothing_test.cpp)
 target_link_libraries(flow_smoothing_test
   flowthrone
   test_utils
-  ${GTEST_BOTH_LIBRARIES}
+  gtest
   ${GFLAGS_LIBRARIES}
 )
 
